@@ -39,10 +39,10 @@ const projects = [
     stack: ["Données géospatiales", "OpenStreetMap", "Statistiques suisses"],
     image: {
       src: "/estimeat-project.webp",
-      srcSet: "/estimeat-project-720.webp 720w, /estimeat-project.webp 1016w",
+      srcSet: "/estimeat-project-720.webp 720w, /estimeat-project.webp 2880w",
       alt: "Page d’accueil d’EstimEat, plateforme d’analyse d’implantations de restaurants",
-      width: 1016,
-      height: 768,
+      width: 2880,
+      height: 1800,
     },
     links: [
       { label: "Démo", href: "https://estimeat.amacker.dev/", kind: "website" },
@@ -105,10 +105,10 @@ const projects = [
     stack: ["API", "Vercel"],
     image: {
       src: "/soventory-project.webp",
-      srcSet: "/soventory-project-720.webp 720w, /soventory-project.webp 1024w",
-      alt: "Écran de connexion de Soventory, application de gestion d’inventaire",
-      width: 1024,
-      height: 640,
+      srcSet: "/soventory-project-720.webp 720w, /soventory-project.webp 2880w",
+      alt: "Page de présentation de Soventory avec un aperçu de l’inventaire des équipements",
+      width: 2880,
+      height: 1500,
     },
     links: [
       { label: "Démo", href: "https://soventory.vercel.app/", kind: "website" },
@@ -123,10 +123,10 @@ const projects = [
     evidence: { label: "Livraison", value: "Déploiement de la documentation automatisé avec GitLab CI." },
     image: {
       src: "/systems-courses-project.webp",
-      srcSet: "/systems-courses-project-720.webp 720w, /systems-courses-project.webp 1008w",
+      srcSet: "/systems-courses-project-720.webp 720w, /systems-courses-project.webp 2880w",
       alt: "Catalogue Systems Engineering : filtres par semestre et orientation, et cartes de cours",
-      width: 1008,
-      height: 768,
+      width: 2880,
+      height: 2280,
     },
     links: [
       { label: "Voir les cartes de cours", href: "https://synd.hevs.io/courses/index.html", kind: "website" },
