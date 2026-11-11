@@ -4,6 +4,11 @@ import {
   IconBrandGithub,
   IconBrandLinkedin,
   IconArrowsMaximize,
+  IconArrowDown,
+  IconArrowLeft,
+  IconArrowRight,
+  IconArrowUp,
+  IconArrowUpRight,
   IconChevronLeft,
   IconChevronRight,
   IconCheck,
@@ -185,39 +190,39 @@ const passions = [
     id: "view",
     src: "/point-de-vue-alpin.webp",
     alt: "Kevin montre un point au loin depuis un belvédère en montagne",
-    caption: "Belvédère en Valais",
+    caption: "Belvédère en Valais · Août 2026",
     column: "views",
     mobileOrder: 1,
   },
   {
     id: "basket",
     src: "/basket-temps-mort.webp",
-    alt: "Kevin assis sur le banc pendant une pause de basket",
-    caption: "Basket · pause de match",
+    alt: "Kevin assis sur le banc pendant une pause au My3x3 à Martigny",
+    caption: "My3x3 · Martigny · Août 2026",
     column: "movement",
     mobileOrder: 2,
   },
   {
     id: "course",
     src: "/course-route.webp",
-    alt: "Kevin court au milieu d’une course en extérieur",
-    caption: "Course · course populaire",
+    alt: "Kevin court au Marathon des Terroirs à Martigny",
+    caption: "Marathon des Terroirs · Martigny · Mai 2023",
     column: "movement",
     mobileOrder: 5,
   },
   {
     id: "hike",
     src: "/randonnee-alpes.webp",
-    alt: "Trois amis marchent sur un sentier de montagne",
-    caption: "Randonnée dans les Alpes",
+    alt: "Trois amis marchent sur un sentier en direction du barrage d’Émosson, au-dessus de Martigny",
+    caption: "En route vers Émosson · Au-dessus de Martigny · Septembre 2026",
     column: "elsewhere",
     mobileOrder: 3,
   },
   {
     id: "coucher",
     src: "/coucher-soleil.webp",
-    alt: "Coucher de soleil sur la mer",
-    caption: "Coucher de soleil en bord de mer",
+    alt: "Coucher de soleil sur le Léman au Bouveret",
+    caption: "Coucher de soleil · Le Bouveret · Septembre 2026",
     column: "elsewhere",
     mobileOrder: 4,
   },
@@ -307,14 +312,14 @@ function ScrollJourney({ active }) {
       </nav>
       <div className="journey-mobile">
         {previous ? (
-          <a href={`#${previous.id}`} aria-label={`Étape précédente : ${previous.label}`}>←</a>
+          <a href={`#${previous.id}`} aria-label={`Étape précédente : ${previous.label}`}><IconArrowLeft className="inline-arrow" stroke={1.7} aria-hidden="true" /></a>
         ) : <span aria-hidden="true" />}
         <a className="journey-mobile-current" href={`#${scrollStops[activeIndex].id}`}>
           {String(activeIndex + 1).padStart(2, "0")} / {String(scrollStops.length).padStart(2, "0")}
           <span>{scrollStops[activeIndex].label}</span>
         </a>
         {next ? (
-          <a href={`#${next.id}`} aria-label={`Étape suivante : ${next.label}`}>→</a>
+          <a href={`#${next.id}`} aria-label={`Étape suivante : ${next.label}`}><IconArrowRight className="inline-arrow" stroke={1.7} aria-hidden="true" /></a>
         ) : <span aria-hidden="true" />}
         <span className="journey-mobile-progress" style={{ "--scroll-progress": `${progress}%` }} aria-hidden="true" />
       </div>
@@ -418,11 +423,8 @@ function PassionsSection() {
         <div className="passions-intro">
           <div className="passions-copy">
             <p className="passions-kicker">06 / 06 · Sports et sorties</p>
-            <h2 id="passions-heading">Basket.<br />Course.<br />Randonnée.</h2>
+            <h2 id="passions-heading">À côté.</h2>
           </div>
-          <p className="passions-description">
-            Basket, course à pied et randonnée dans les Alpes. Les photos montrent des matchs, des courses et des sorties récentes.
-          </p>
         </div>
         <div className="passions-gallery" aria-label="Quelques moments de sport, de randonnée et d’exploration">
           {["views", "movement", "elsewhere"].map((column) => (
@@ -441,7 +443,7 @@ function PassionsSection() {
                     aria-haspopup="dialog"
                   >
                     <img src={photo.src} alt={photo.alt} loading="lazy" decoding="async" />
-                    <span className="passion-zoom" aria-hidden="true">Agrandir <span>↗</span></span>
+                    <span className="passion-zoom" aria-hidden="true">Agrandir <IconArrowUpRight className="inline-arrow" stroke={1.7} /></span>
                   </button>
                   <figcaption>{photo.caption}</figcaption>
                 </figure>
@@ -449,9 +451,6 @@ function PassionsSection() {
             </div>
           ))}
         </div>
-        <p className="passions-trail" aria-label="Quelques centres d’intérêt">
-          <span>Basket</span><span>Course à pied</span><span>Randonnée</span><span>Escapades</span>
-        </p>
       </div>
       <Modal
         opened={preview !== null}
@@ -532,10 +531,10 @@ function Portrait() {
       >
         <img
           className="portrait-full"
-          src="/portrait-2026-960.webp"
+          src="/diplome-2026-complet.webp"
           alt="Kevin Voisin recevant son diplôme d’ingénieur HES-SO sur scène, 2026"
-          width="960"
-          height="1200"
+          width="1600"
+          height="1067"
         />
       </Modal>
     </>
@@ -585,7 +584,7 @@ function ProjectModule({ project, onPreview, index }) {
             {project.links.map((link) => (
               <li key={link.href}>
                 <a href={link.href} target="_blank" rel="noopener noreferrer">
-                  {link.label}<span aria-hidden="true"> ↗</span>
+                  {link.label}<span aria-hidden="true"> <IconArrowUpRight className="inline-arrow" stroke={1.7} /></span>
                 </a>
               </li>
             ))}
@@ -610,7 +609,7 @@ function ProjectModule({ project, onPreview, index }) {
             loading="lazy"
             decoding="async"
           />
-          <span className="visual-label">{actionLabel} <span aria-hidden="true">↗</span></span>
+          <span className="visual-label">{actionLabel} <IconArrowUpRight className="inline-arrow" stroke={1.7} aria-hidden="true" /></span>
         </button>
       ) : <ProjectDiagram diagram={project.diagram} />}
     </Reveal>
@@ -665,7 +664,7 @@ function Entries({ items }) {
             <p className="entry-company">
               {item.companyUrl ? (
                 <a href={item.companyUrl} target="_blank" rel="noopener noreferrer">
-                  {item.company}<span aria-hidden="true"> ↗</span>
+                  {item.company}<span aria-hidden="true"> <IconArrowUpRight className="inline-arrow" stroke={1.7} /></span>
                 </a>
               ) : item.company}
             </p>
@@ -700,7 +699,7 @@ function App() {
             </a>
           ))}
         </nav>
-        <a className="header-contact" href={`mailto:${EMAIL}`}>Me contacter <span aria-hidden="true">↗</span></a>
+        <a className="header-contact" href={`mailto:${EMAIL}`}>Me contacter <span aria-hidden="true"><IconArrowUpRight className="inline-arrow" stroke={1.7} /></span></a>
       </header>
       <ScrollJourney active={activeSection} />
 
@@ -718,7 +717,7 @@ function App() {
               <a href="https://pickplace.com/" target="_blank" rel="noopener noreferrer">Pick &amp; Place</a>,
               jusqu’à mon entrée à l’armée en février.
             </p>
-            <a className="cover-project-link" href="#projets">Projets <span aria-hidden="true">↓</span></a>
+            <a className="cover-project-link" href="#projets">Projets <IconArrowDown className="inline-arrow" stroke={1.7} aria-hidden="true" /></a>
           </div>
           <Portrait />
         </div>
@@ -797,7 +796,7 @@ function App() {
       <footer className="page-footer content">
         <span>© 2026 Kevin Voisin</span>
         <span>Conçu &amp; développé en Valais</span>
-        <a href="#accueil">Haut de page ↑</a>
+        <a href="#accueil">Haut de page <IconArrowUp className="inline-arrow" stroke={1.7} aria-hidden="true" /></a>
       </footer>
       </main>
     </div>
