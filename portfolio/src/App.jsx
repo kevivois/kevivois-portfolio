@@ -22,7 +22,7 @@ const projects = [
     type: "Application web",
     title: "StudEase",
     description:
-      "Plateforme suisse de mise en relation étudiants et entreprises. Les candidats peuvent chercher des offres, les enregistrer et suivre leurs candidatures.",
+      "Mandat réalisé au sein de la Junior Entreprise Valais (JEVS) pour des étudiants en gestion de la HES-SO Valais-Wallis à Sierre, dans le cadre du cours Business Experience (BEX). Cette plateforme suisse met en relation étudiants et entreprises : recherche d’offres, favoris et suivi des candidatures.",
     stack: ["React", "Next.js", "Supabase", "PostgreSQL"],
     evidence: { label: "Implémentation", value: "Authentification JWT et base de données PostgreSQL." },
     image: {
@@ -34,13 +34,15 @@ const projects = [
     },
     links: [
       { label: "Démo", href: "https://stud-easy.vercel.app/info", kind: "website" },
+      { label: "Business Experience", href: "https://www.hevs.ch/fr/hautes-ecoles/haute-ecole-de-gestion/business-experience/", kind: "website" },
+      { label: "JEVS", href: "http://jevs.ch/", kind: "website" },
     ],
   },
   {
     type: "Plateforme data · Suisse",
     title: "EstimEat",
     description:
-      "Compare les communes suisses pour l’implantation d’un restaurant à partir de données géographiques, démographiques et économiques.",
+      "Projet réalisé à la HES dans le cadre d’un cours d’une semaine. EstimEat compare les communes suisses pour l’implantation d’un restaurant à partir de données géographiques, démographiques et économiques.",
     stack: ["Données géospatiales", "OpenStreetMap", "Statistiques suisses"],
     image: {
       src: "/estimeat-project.webp",
@@ -106,7 +108,7 @@ const projects = [
     type: "Application · Gestion d’inventaire",
     title: "Soventory",
     description:
-      "Application web de gestion d’inventaire connectée à une API, avec écran de connexion dédié.",
+      "Projet réalisé pour un professeur et l’administration de l’EPTM, dans le cadre du cours de projet libre du mercredi après-midi. Cette application web de gestion d’inventaire est connectée à une API et dispose d’un écran de connexion dédié.",
     stack: ["API", "Vercel"],
     image: {
       src: "/soventory-project.webp",
@@ -117,13 +119,14 @@ const projects = [
     },
     links: [
       { label: "Démo", href: "https://soventory.vercel.app/", kind: "website" },
+      { label: "EPTM", href: "https://eptm.ch/", kind: "website" },
     ],
   },
   {
     type: "Documentation & CI/CD",
     title: "Systems Engineering Entry Page",
     description:
-      "Documentation de cours générée avec MkDocs. Les cartes se filtrent par semestre et orientation, et GitLab CI automatise le déploiement.",
+      "Mandat confié par le responsable de la filière Systèmes industriels de la HES-SO Valais-Wallis, réalisé au sein de la Junior Entreprise Valais (JEVS). Cette documentation de cours est générée avec MkDocs : les cartes se filtrent par semestre et orientation, et GitLab CI automatise le déploiement.",
     stack: ["HTML/CSS", "MkDocs", "GitLab CI"],
     evidence: { label: "Livraison", value: "Déploiement de la documentation automatisé avec GitLab CI." },
     image: {
@@ -135,6 +138,9 @@ const projects = [
     },
     links: [
       { label: "Voir les cartes de cours", href: "https://synd.hevs.io/courses/index.html", kind: "website" },
+      { label: "Filière Systèmes industriels", href: "https://www.hevs.ch/fr/hautes-ecoles/haute-ecole-d-ingenierie/systemes-industriels/", kind: "website" },
+      { label: "Article LinkedIn", href: "https://lnkd.in/p/ePmArn8z", kind: "website" },
+      { label: "JEVS", href: "http://jevs.ch/", kind: "website" },
     ],
   },
 ];
@@ -151,6 +157,7 @@ const experience = [
     date: "2024 à 2026",
     title: "Responsable informatique",
     company: "Junior Entreprise Valais",
+    companyUrl: "http://jevs.ch/",
     detail: "Gestion des mandats informatiques, réalisation de sites web et mise en production.",
     stack: "React · WordPress · Infomaniak",
   },
@@ -158,6 +165,7 @@ const experience = [
     date: "2022 à 2023",
     title: "Stagiaire en informatique",
     company: "CEIDOS · Monthey",
+    companyUrl: "https://ceidos.com/",
     detail:
       "Développement de fonctionnalités et optimisation d’un logiciel d’analyse biomédicale.",
     stack: "Python · PyQt · C++",
@@ -169,12 +177,20 @@ const education = [
     date: "2023 à 2026",
     title: "Bachelor of Science HES-SO",
     company: "Haute École d’Ingénierie · Sion",
-    detail: "Ingénierie informatique, orientation ingénierie des données.",
+    detail: (
+      <>
+        <a href="https://isc.hevs.ch/" target="_blank" rel="noopener noreferrer">
+          Informatique et systèmes de communication
+        </a>
+        , orientation ingénierie des données.
+      </>
+    ),
   },
   {
     date: "2019 à 2023",
     title: "CFC en informatique",
     company: "EPTM · Sion",
+    companyUrl: "https://eptm.ch/",
     detail: "Développement d’applications.",
   },
 ];
@@ -713,7 +729,9 @@ function App() {
               <span className="hero-line">informatique</span>
             </h1>
             <p className="summary">
-              Diplômé en ingénierie informatique HES-SO. Stage de cinq mois chez{" "}
+              Diplômé en ingénierie informatique{" "}
+              <a href="https://www.hes-so.ch/" target="_blank" rel="noopener noreferrer">HES-SO</a>.
+              {" "}Stage de cinq mois chez{" "}
               <a href="https://pickplace.com/" target="_blank" rel="noopener noreferrer">Pick &amp; Place</a>,
               jusqu’à mon entrée à l’armée en février.
             </p>

@@ -78,7 +78,7 @@ ol, ul { padding: 0; list-style: none; }
 .hero-line { display: block; overflow: hidden; animation: hero-enter .8s cubic-bezier(.2, .75, .2, 1) both; }
 .hero-line + .hero-line { animation-delay: .12s; }
 .summary { max-width: 540px; margin-top: 30px; color: #303b35; font-size: clamp(16px, 1.35vw, 18px); line-height: 1.7; }
-.summary a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.summary a, .entry-detail a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .cover-project-link { display: inline-flex; gap: 24px; align-items: center; margin-top: 25px; padding: 6px 0; border-bottom: 1px solid var(--ink); font-size: 13px; }
 .cover-project-link:hover { color: var(--accent); }
 .portrait { width: 100%; max-width: 320px; justify-self: end; }
