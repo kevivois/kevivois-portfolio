@@ -1,6 +1,43 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://www.kevivois.ch/</loc>
+    <image:image>
+      <image:loc>https://www.kevivois.ch/portrait-2026-960.webp</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://www.kevivois.ch/diplome-2026-complet.webp</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://www.kevivois.ch/studease-project.webp</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://www.kevivois.ch/estimeat-project.webp</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://www.kevivois.ch/cuda-ray-tracer.webp</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://www.kevivois.ch/soventory-project.webp</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://www.kevivois.ch/systems-courses-project.webp</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://www.kevivois.ch/point-de-vue-alpin.webp</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://www.kevivois.ch/basket-temps-mort.webp</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://www.kevivois.ch/course-route.webp</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://www.kevivois.ch/randonnee-alpes.webp</image:loc>
+    </image:image>
+    <image:image>
+      <image:loc>https://www.kevivois.ch/coucher-soleil.webp</image:loc>
+    </image:image>
   </url>
 </urlset>
