@@ -15,7 +15,7 @@ import {
   IconCopy,
 } from "@tabler/icons-react";
 
-const EMAIL = "kevin.voisin187@gmail.com";
+const EMAIL = "contact@kevivois.ch";
 
 const projects = [
   {
@@ -768,26 +768,31 @@ function App() {
         <Reveal as="section" id="contact" className="contact" aria-labelledby="contact-heading">
           <SectionHeading id="contact-heading">Contact</SectionHeading>
           <p className="contact-lead">
-            Développement logiciel et ingénierie des données. Contact direct par e-mail ou via GitHub et LinkedIn.
+            Un projet informatique en tête ? Web, data, ingénierie logicielle ou autre : parlons-en par e-mail ou sur GitHub et LinkedIn.
           </p>
-          <CopyEmail />
-          <div className="contact-links">
-            <SlideLink
-              href="https://github.com/kevivois"
-              target="_blank"
-              rel="noreferrer"
-              icon={<IconBrandGithub size={13} stroke={1.7} aria-hidden="true" />}
-            >
-              GitHub
-            </SlideLink>
-            <SlideLink
-              href="https://linkedin.com/in/kevin-voisin"
-              target="_blank"
-              rel="noreferrer"
-              icon={<IconBrandLinkedin size={13} stroke={1.7} aria-hidden="true" />}
-            >
-              LinkedIn
-            </SlideLink>
+          <div className="contact-details">
+            <CopyEmail />
+            <div className="contact-links">
+              <SlideLink
+                href="https://github.com/kevivois"
+                target="_blank"
+                rel="noreferrer"
+                icon={<IconBrandGithub size={18} stroke={1.7} aria-hidden="true" />}
+              >
+                GitHub
+              </SlideLink>
+              <SlideLink
+                href="https://linkedin.com/in/kevin-voisin"
+                target="_blank"
+                rel="noreferrer"
+                icon={<IconBrandLinkedin size={18} stroke={1.7} aria-hidden="true" />}
+              >
+                LinkedIn
+              </SlideLink>
+            </div>
+            <a className="contact-cv" href="/Voisin_Kevin_CV.pdf" download="Kevin-Voisin-CV.pdf">
+              Télécharger mon CV <IconArrowDown className="inline-arrow" stroke={1.7} aria-hidden="true" />
+            </a>
           </div>
         </Reveal>
 
