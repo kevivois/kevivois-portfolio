@@ -3,6 +3,9 @@
         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
   <url>
     <loc>https://www.kevivois.ch/</loc>
+    <lastmod>2026-11-13</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
     <image:image>
       <image:loc>https://www.kevivois.ch/portrait-2026-960.webp</image:loc>
     </image:image>

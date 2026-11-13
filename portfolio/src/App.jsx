@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { Modal } from "@mantine/core";
 import {
   IconBrandGithub,
@@ -14,244 +14,14 @@ import {
   IconCheck,
   IconCopy,
 } from "@tabler/icons-react";
+import { LANGUAGES, translations } from "./translations";
 
 const EMAIL = "contact@kevivois.ch";
 
-const projects = [
-  {
-    type: "Application web",
-    title: "StudEase",
-    description:
-      "Mandat réalisé au sein de la Junior Entreprise Valais (JEVS) pour des étudiants en gestion de la HES-SO Valais-Wallis à Sierre, dans le cadre du cours Business Experience (BEX). Cette plateforme suisse met en relation étudiants et entreprises : recherche d’offres, favoris et suivi des candidatures.",
-    stack: ["React", "Next.js", "Supabase", "PostgreSQL"],
-    evidence: { label: "Implémentation", value: "Authentification JWT et base de données PostgreSQL." },
-    image: {
-      src: "/studease-project.webp",
-      srcSet: "/studease-project-960.webp 960w, /studease-project.webp 2880w",
-      alt: "Page de présentation StudEase : opportunités pour étudiants et entreprises suisses",
-      width: 2880,
-      height: 1800,
-    },
-    links: [
-      { label: "Démo", href: "https://stud-easy.vercel.app/info", kind: "website" },
-      { label: "Business Experience", href: "https://www.hevs.ch/fr/hautes-ecoles/haute-ecole-de-gestion/business-experience/", kind: "website" },
-      { label: "JEVS", href: "http://jevs.ch/", kind: "website" },
-    ],
-  },
-  {
-    type: "Plateforme data · Suisse",
-    title: "EstimEat",
-    description:
-      "Projet réalisé à la HES dans le cadre d’un cours d’une semaine. EstimEat compare les communes suisses pour l’implantation d’un restaurant à partir de données géographiques, démographiques et économiques.",
-    stack: ["Données géospatiales", "OpenStreetMap", "Statistiques suisses"],
-    image: {
-      src: "/estimeat-project.webp",
-      srcSet: "/estimeat-project-720.webp 720w, /estimeat-project.webp 2880w",
-      alt: "Page d’accueil d’EstimEat, plateforme d’analyse d’implantations de restaurants",
-      width: 2880,
-      height: 1800,
-    },
-    links: [
-      { label: "Démo", href: "https://estimeat.amacker.dev/", kind: "website" },
-      { label: "Code source", href: "https://github.com/MadeInShineA/EstimEat" },
-    ],
-  },
-  {
-    type: "Rendu graphique · GPU",
-    title: "Ray tracer CUDA",
-    description:
-      "Moteur de rendu en C++ et CUDA. Les calculs de rayons, d’intersections et d’éclairage sont exécutés en parallèle sur GPU.",
-    stack: ["C++", "CUDA", "Ray tracing"],
-    image: {
-      src: "/cuda-ray-tracer.webp",
-      srcSet: "/cuda-ray-tracer-960.webp 960w, /cuda-ray-tracer.webp 1920w",
-      alt: "Rendu du ray tracer CUDA : sphères aux matériaux et éclairages différents",
-      width: 1920,
-      height: 1080,
-    },
-  },
-  {
-    type: "Travail de bachelor · Constellium",
-    title: "Maintenance prédictive",
-    description:
-      "Projet de bachelor réalisé avec Constellium. Des mesures de couple alimentent des modèles temporels qui estiment l’usure d’un outil industriel.",
-    stack: ["Python", "LSTM", "Temporal Fusion Transformer"],
-    diagram: {
-      theme: "data",
-      title: "Lire l’usure.",
-      steps: ["Mesures de couple", "LSTM / TFT", "Estimation de l’usure"],
-      caption: "Du signal industriel à la prédiction",
-    },
-    links: [
-      { label: "Rapport complet (PDF)", href: "https://tbs.isc-vs.ch/pdfs/2025-2026/kevin-voisin.full.pdf" },
-      { label: "Résumé (PDF)", href: "https://tbs.isc-vs.ch/pdfs/2025-2026/kevin-voisin.pdf" },
-    ],
-  },
-  {
-    type: "Outil de test logiciel",
-    title: "Stochastic AST & Source Code Fuzzer",
-    description:
-      "Génère des programmes en Swift, Scala, Forth et C depuis une grammaire EBNF, puis les utilise pour comparer le comportement de compilateurs.",
-    stack: ["Swift", "Scala", "Forth", "C"],
-    evidence: { label: "Validation", value: "49 tests unitaires pour une architecture modulaire." },
-    diagram: {
-      theme: "code",
-      title: "Une grammaire,\nplusieurs langages.",
-      steps: ["Grammaire EBNF", "Générateur Swift", "C · Scala · Forth"],
-      caption: "Génération de programmes pour le test de compilateurs",
-    },
-    links: [
-      { label: "Code source", href: "https://github.com/kevivois/semester-project" },
-    ],
-  },
-  {
-    type: "Application · Gestion d’inventaire",
-    title: "Soventory",
-    description:
-      "Projet réalisé pour un professeur et l’administration de l’EPTM, dans le cadre du cours de projet libre du mercredi après-midi. Cette application web de gestion d’inventaire est connectée à une API et dispose d’un écran de connexion dédié.",
-    stack: ["API", "Vercel"],
-    image: {
-      src: "/soventory-project.webp",
-      srcSet: "/soventory-project-720.webp 720w, /soventory-project.webp 2880w",
-      alt: "Page de présentation de Soventory avec un aperçu de l’inventaire des équipements",
-      width: 2880,
-      height: 1500,
-    },
-    links: [
-      { label: "Démo", href: "https://soventory.vercel.app/", kind: "website" },
-      { label: "EPTM", href: "https://eptm.ch/", kind: "website" },
-    ],
-  },
-  {
-    type: "Documentation & CI/CD",
-    title: "Systems Engineering Entry Page",
-    description:
-      "Mandat confié par le responsable de la filière Systèmes industriels de la HES-SO Valais-Wallis, réalisé au sein de la Junior Entreprise Valais (JEVS). Cette documentation de cours est générée avec MkDocs : les cartes se filtrent par semestre et orientation, et GitLab CI automatise le déploiement.",
-    stack: ["HTML/CSS", "MkDocs", "GitLab CI"],
-    evidence: { label: "Livraison", value: "Déploiement de la documentation automatisé avec GitLab CI." },
-    image: {
-      src: "/systems-courses-project.webp",
-      srcSet: "/systems-courses-project-720.webp 720w, /systems-courses-project.webp 2880w",
-      alt: "Catalogue Systems Engineering : filtres par semestre et orientation, et cartes de cours",
-      width: 2880,
-      height: 2280,
-    },
-    links: [
-      { label: "Voir les cartes de cours", href: "https://synd.hevs.io/courses/index.html", kind: "website" },
-      { label: "Filière Systèmes industriels", href: "https://www.hevs.ch/fr/hautes-ecoles/haute-ecole-d-ingenierie/systemes-industriels/", kind: "website" },
-      { label: "Article LinkedIn", href: "https://lnkd.in/p/ePmArn8z", kind: "website" },
-      { label: "JEVS", href: "http://jevs.ch/", kind: "website" },
-    ],
-  },
-];
+const LangContext = createContext(null);
+const useLang = () => useContext(LangContext);
 
-const experience = [
-  {
-    date: "En cours",
-    title: "Stage de cinq mois",
-    company: "Pick & Place",
-    companyUrl: "https://pickplace.com/",
-    detail: "Avant mon entrée à l’armée, prévue en février.",
-  },
-  {
-    date: "2024 à 2026",
-    title: "Responsable informatique",
-    company: "Junior Entreprise Valais",
-    companyUrl: "http://jevs.ch/",
-    detail: "Gestion des mandats informatiques, réalisation de sites web et mise en production.",
-    stack: "React · WordPress · Infomaniak",
-  },
-  {
-    date: "2022 à 2023",
-    title: "Stagiaire en informatique",
-    company: "CEIDOS · Monthey",
-    companyUrl: "https://ceidos.com/",
-    detail:
-      "Développement de fonctionnalités et optimisation d’un logiciel d’analyse biomédicale.",
-    stack: "Python · PyQt · C++",
-  },
-];
-
-const education = [
-  {
-    date: "2023 à 2026",
-    title: "Bachelor of Science HES-SO",
-    company: "Haute École d’Ingénierie · Sion",
-    detail: (
-      <>
-        <a href="https://isc.hevs.ch/" target="_blank" rel="noopener noreferrer">
-          Informatique et systèmes de communication
-        </a>
-        , orientation ingénierie des données.
-      </>
-    ),
-  },
-  {
-    date: "2019 à 2023",
-    title: "CFC en informatique",
-    company: "EPTM · Sion",
-    companyUrl: "https://eptm.ch/",
-    detail: "Développement d’applications.",
-  },
-];
-
-const skills = [
-  { label: "Web & applications", items: ["React", "Next.js", "TypeScript", "Java", "C#", "Swift"] },
-  { label: "Data & IA", items: ["Python", "Pandas", "Polars", "PyTorch", "LSTM", "TFT"] },
-  { label: "Outils & données", items: ["SQL", "PostgreSQL", "Supabase", "Git", "Docker", "CI/CD"] },
-];
-
-const passions = [
-  {
-    id: "view",
-    src: "/point-de-vue-alpin.webp",
-    alt: "Kevin montre un point au loin depuis un belvédère en montagne",
-    caption: "Belvédère en Valais · Août 2026",
-    column: "views",
-    mobileOrder: 1,
-  },
-  {
-    id: "basket",
-    src: "/basket-temps-mort.webp",
-    alt: "Kevin assis sur le banc pendant une pause au My3x3 à Martigny",
-    caption: "My3x3 · Martigny · Août 2026",
-    column: "movement",
-    mobileOrder: 2,
-  },
-  {
-    id: "course",
-    src: "/course-route.webp",
-    alt: "Kevin court au Marathon des Terroirs à Martigny",
-    caption: "Marathon des Terroirs · Martigny · Mai 2023",
-    column: "movement",
-    mobileOrder: 5,
-  },
-  {
-    id: "hike",
-    src: "/randonnee-alpes.webp",
-    alt: "Trois amis marchent sur un sentier en direction du barrage d’Émosson, au-dessus de Martigny",
-    caption: "En route vers Émosson · Au-dessus de Martigny · Septembre 2026",
-    column: "elsewhere",
-    mobileOrder: 3,
-  },
-  {
-    id: "coucher",
-    src: "/coucher-soleil.webp",
-    alt: "Coucher de soleil sur le Léman au Bouveret",
-    caption: "Coucher de soleil · Le Bouveret · Septembre 2026",
-    column: "elsewhere",
-    mobileOrder: 4,
-  },
-];
-
-const navItems = [
-  { id: "projets", label: "Projets" },
-  { id: "parcours", label: "Parcours" },
-  { id: "competences", label: "Compétences" },
-  { id: "contact", label: "Contact" },
-];
-const scrollStops = [{ id: "accueil", label: "Départ" }, ...navItems, { id: "passions", label: "À côté" }];
-const sectionIds = scrollStops.map((item) => item.id);
+const sectionIds = ["accueil", "projets", "parcours", "competences", "contact", "passions"];
 
 const prefersReducedMotion = () =>
   typeof window !== "undefined" &&
@@ -280,8 +50,39 @@ function useActiveSection(ids) {
   return active;
 }
 
+function LanguageSwitcher({ current, onChange }) {
+  return (
+    <div className="lang-switcher" role="group" aria-label="Langues / Languages">
+      {LANGUAGES.map((l) => (
+        <button
+          key={l.code}
+          type="button"
+          className={`lang-btn${current === l.code ? " is-active" : ""}`}
+          onClick={() => onChange(l.code)}
+          aria-pressed={current === l.code}
+          aria-label={l.name}
+          title={l.name}
+        >
+          {l.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function ScrollJourney({ active }) {
+  const { t } = useLang();
   const [progress, setProgress] = useState(0);
+
+  const scrollStops = [
+    { id: "accueil", label: t.nav.depart },
+    { id: "projets", label: t.nav.projets },
+    { id: "parcours", label: t.nav.parcours },
+    { id: "competences", label: t.nav.competences },
+    { id: "contact", label: t.nav.contact },
+    { id: "passions", label: t.nav.passions },
+  ];
+
   const activeIndex = Math.max(0, scrollStops.findIndex((stop) => stop.id === active));
   const previous = scrollStops[activeIndex - 1];
   const next = scrollStops[activeIndex + 1];
@@ -303,12 +104,12 @@ function ScrollJourney({ active }) {
   }, []);
 
   return (
-    <aside className={`scroll-journey${active === "accueil" ? " is-intro" : ""}`} aria-label="Progression dans le portfolio">
+    <aside className={`scroll-journey${active === "accueil" ? " is-intro" : ""}`} aria-label={t.journey.label}>
       <p className="journey-current" aria-live="polite">
         <span>{String(activeIndex + 1).padStart(2, "0")} / {String(scrollStops.length).padStart(2, "0")}</span>
         <b>{scrollStops[activeIndex].label}</b>
       </p>
-      <nav className="journey-nav" aria-label="Étapes du portfolio">
+      <nav className="journey-nav" aria-label={t.journey.stepsLabel}>
         <ol>
           {scrollStops.map((stop, index) => (
             <li key={stop.id}>
@@ -328,14 +129,14 @@ function ScrollJourney({ active }) {
       </nav>
       <div className="journey-mobile">
         {previous ? (
-          <a href={`#${previous.id}`} aria-label={`Étape précédente : ${previous.label}`}><IconArrowLeft className="inline-arrow" stroke={1.7} aria-hidden="true" /></a>
+          <a href={`#${previous.id}`} aria-label={`${t.journey.prev} ${previous.label}`}><IconArrowLeft className="inline-arrow" stroke={1.7} aria-hidden="true" /></a>
         ) : <span aria-hidden="true" />}
         <a className="journey-mobile-current" href={`#${scrollStops[activeIndex].id}`}>
           {String(activeIndex + 1).padStart(2, "0")} / {String(scrollStops.length).padStart(2, "0")}
           <span>{scrollStops[activeIndex].label}</span>
         </a>
         {next ? (
-          <a href={`#${next.id}`} aria-label={`Étape suivante : ${next.label}`}><IconArrowRight className="inline-arrow" stroke={1.7} aria-hidden="true" /></a>
+          <a href={`#${next.id}`} aria-label={`${t.journey.next} ${next.label}`}><IconArrowRight className="inline-arrow" stroke={1.7} aria-hidden="true" /></a>
         ) : <span aria-hidden="true" />}
         <span className="journey-mobile-progress" style={{ "--scroll-progress": `${progress}%` }} aria-hidden="true" />
       </div>
@@ -343,8 +144,6 @@ function ScrollJourney({ active }) {
   );
 }
 
-// Révèle l’élément au défilement. React 19 : le callback de ref peut
-// retourner une fonction de nettoyage, inutile d’utiliser useEffect ici.
 function Reveal({ as: Tag = "div", className = "", children, ...props }) {
   const observe = (node) => {
     if (!node) return undefined;
@@ -371,8 +170,6 @@ function Reveal({ as: Tag = "div", className = "", children, ...props }) {
   );
 }
 
-// Lien à texte doublé : le libellé glisse vers le haut au survol.
-// L’icône éventuelle reste fixe, hors de la partie animée.
 function SlideLink({ children, icon, className = "", ...props }) {
   return (
     <a className={`slide-link ${className}`.trim()} {...props}>
@@ -383,6 +180,7 @@ function SlideLink({ children, icon, className = "", ...props }) {
 }
 
 function CopyEmail() {
+  const { t } = useLang();
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try {
@@ -397,7 +195,9 @@ function CopyEmail() {
     <button type="button" className="copy-email" onClick={copy} aria-live="polite">
       <span>{EMAIL}</span>
       {copied ? <IconCheck size={13} stroke={2} /> : <IconCopy size={13} stroke={1.8} />}
-      <span className="visually-hidden">{copied ? "Adresse copiée" : "Copier l’adresse e-mail"}</span>
+      <span className="visually-hidden">
+        {copied ? t.contact.emailCopied : t.contact.copyEmail}
+      </span>
     </button>
   );
 }
@@ -412,6 +212,8 @@ function SectionHeading({ id, children, aside }) {
 }
 
 function PassionsSection() {
+  const { t } = useLang();
+  const passions = t.passions.items;
   const [previewIndex, setPreviewIndex] = useState(null);
   const preview = previewIndex === null ? null : passions[previewIndex];
   const showPrevious = () => setPreviewIndex((previewIndex + passions.length - 1) % passions.length);
@@ -431,35 +233,37 @@ function PassionsSection() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [previewIndex]);
+  }, [previewIndex, passions.length]);
 
   return (
     <Reveal as="section" id="passions" className="passions-section" aria-labelledby="passions-heading">
       <div className="passions-inner">
         <div className="passions-intro">
           <div className="passions-copy">
-            <p className="passions-kicker">06 / 06 · Sports et sorties</p>
-            <h2 id="passions-heading">À côté.</h2>
+            <p className="passions-kicker">{t.passions.kicker}</p>
+            <h2 id="passions-heading">{t.passions.heading}</h2>
           </div>
         </div>
-        <div className="passions-gallery" aria-label="Quelques moments de sport, de randonnée et d’exploration">
+        <div className="passions-gallery" aria-label={t.passions.ariaLabel}>
           {["views", "movement", "elsewhere"].map((column) => (
             <div className={`passions-column passions-column-${column}`} key={column}>
               {passions.filter((photo) => photo.column === column).map((photo, index) => (
                 <figure
                   className={`passion-photo passion-photo-${photo.id}`}
-                  key={photo.src}
+                  key={photo.id || photo.src}
                   style={{ "--photo-delay": `${index * 100}ms`, "--mobile-order": photo.mobileOrder }}
                 >
                   <button
                     className="passion-image-button"
                     type="button"
                     onClick={() => setPreviewIndex(passions.findIndex((item) => item.id === photo.id))}
-                    aria-label={`Voir en grand : ${photo.caption}`}
+                    aria-label={`${t.passions.viewLargeAria} ${photo.caption}`}
                     aria-haspopup="dialog"
                   >
                     <img src={photo.src} alt={photo.alt} loading="lazy" decoding="async" />
-                    <span className="passion-zoom" aria-hidden="true">Agrandir <IconArrowUpRight className="inline-arrow" stroke={1.7} /></span>
+                    <span className="passion-zoom" aria-hidden="true">
+                      {t.passions.zoom} <IconArrowUpRight className="inline-arrow" stroke={1.7} />
+                    </span>
                   </button>
                   <figcaption>{photo.caption}</figcaption>
                 </figure>
@@ -475,17 +279,17 @@ function PassionsSection() {
         size="min(1100px, calc(100vw - 32px))"
         centered
         className="image-modal passion-modal"
-        aria-label="Aperçu de la photo"
+        aria-label={t.passions.modalAria}
         overlayProps={{ backgroundOpacity: 0.88, blur: 10 }}
         transitionProps={{ transition: "fade", duration: 280, timingFunction: "cubic-bezier(.2, .75, .2, 1)" }}
       >
         {preview && (
           <div className="passion-lightbox">
-            <button type="button" className="passion-lightbox-arrow" onClick={showPrevious} aria-label="Photo précédente">
+            <button type="button" className="passion-lightbox-arrow" onClick={showPrevious} aria-label={t.passions.prevPhoto}>
               <IconChevronLeft size={22} stroke={1.7} aria-hidden="true" />
             </button>
             <img key={preview.src} src={preview.src} alt={preview.alt} />
-            <button type="button" className="passion-lightbox-arrow" onClick={showNext} aria-label="Photo suivante">
+            <button type="button" className="passion-lightbox-arrow" onClick={showNext} aria-label={t.passions.nextPhoto}>
               <IconChevronRight size={22} stroke={1.7} aria-hidden="true" />
             </button>
             <p>{String(previewIndex + 1).padStart(2, "0")} / {String(passions.length).padStart(2, "0")}</p>
@@ -497,6 +301,7 @@ function PassionsSection() {
 }
 
 function Portrait() {
+  const { t } = useLang();
   const [previewOpen, setPreviewOpen] = useState(false);
 
   return (
@@ -506,7 +311,7 @@ function Portrait() {
           type="button"
           className="portrait-image-button"
           onClick={() => setPreviewOpen(true)}
-          aria-label="Voir en grand : Kevin Voisin recevant son diplôme"
+          aria-label={t.cover.portraitAria}
           aria-haspopup="dialog"
         >
           <picture>
@@ -517,7 +322,7 @@ function Portrait() {
             />
             <img
               src="/portrait-2026-720.jpg"
-              alt="Kevin Voisin recevant son diplôme d’ingénieur HES-SO sur scène, 2026"
+              alt={t.cover.portraitAlt}
               width="720"
               height="900"
               fetchPriority="high"
@@ -526,29 +331,29 @@ function Portrait() {
           </picture>
           <span className="portrait-zoom" aria-hidden="true">
             <IconArrowsMaximize size={13} stroke={1.7} />
-            <span>Voir la photo</span>
+            <span>{t.cover.portraitZoom}</span>
           </span>
         </button>
         <figcaption>
           <span className="portrait-name">Kevin Voisin</span>
-          <span>Diplômé HES-SO · 2026</span>
+          <span>{t.cover.portraitDiploma}</span>
         </figcaption>
       </figure>
       <Modal
         opened={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        title="Kevin Voisin · Diplômé HES-SO, 2026"
+        title={t.cover.portraitModalTitle}
         size="min(1100px, calc(100vw - 32px))"
         centered
         className="image-modal portrait-modal"
-        aria-label="Photo de Kevin Voisin recevant son diplôme"
+        aria-label={t.cover.portraitAlt}
         overlayProps={{ backgroundOpacity: 0.88, blur: 10 }}
         transitionProps={{ transition: "fade", duration: 280, timingFunction: "cubic-bezier(.2, .75, .2, 1)" }}
       >
         <img
           className="portrait-full"
           src="/diplome-2026-complet.webp"
-          alt="Kevin Voisin recevant son diplôme d’ingénieur HES-SO sur scène, 2026"
+          alt={t.cover.portraitAlt}
           width="1600"
           height="1067"
         />
@@ -557,10 +362,10 @@ function Portrait() {
   );
 }
 
-function ProjectDiagram({ diagram }) {
+function ProjectDiagram({ diagram, diagramLabel }) {
   return (
     <figure className={`project-visual project-diagram diagram-${diagram.theme}`}>
-      <span className="visual-label">Schéma de principe</span>
+      <span className="visual-label">{diagramLabel}</span>
       <p className="diagram-title">{diagram.title}</p>
       <ol className="diagram-flow" aria-label={diagram.caption}>
         {diagram.steps.map((step) => <li key={step}>{step}</li>)}
@@ -571,7 +376,8 @@ function ProjectDiagram({ diagram }) {
 }
 
 function ProjectModule({ project, onPreview, index }) {
-  const actionLabel = "Agrandir l’image";
+  const { t } = useLang();
+  const actionLabel = t.projects.enlarge;
 
   return (
     <Reveal
@@ -586,7 +392,7 @@ function ProjectModule({ project, onPreview, index }) {
         </p>
         <h3>{project.title}</h3>
         <p className="project-description">{project.description}</p>
-        <ul className="project-stack" aria-label="Technologies">
+        <ul className="project-stack" aria-label={t.projects.stackLabel}>
           {project.stack.map((item) => <li key={item}>{item}</li>)}
         </ul>
         {project.evidence && (
@@ -596,7 +402,7 @@ function ProjectModule({ project, onPreview, index }) {
           </dl>
         )}
         {project.links && (
-          <ul className="project-links" aria-label={`Liens pour ${project.title}`}>
+          <ul className="project-links" aria-label={`${t.projects.linksLabel} ${project.title}`}>
             {project.links.map((link) => (
               <li key={link.href}>
                 <a href={link.href} target="_blank" rel="noopener noreferrer">
@@ -627,18 +433,19 @@ function ProjectModule({ project, onPreview, index }) {
           />
           <span className="visual-label">{actionLabel} <IconArrowUpRight className="inline-arrow" stroke={1.7} aria-hidden="true" /></span>
         </button>
-      ) : <ProjectDiagram diagram={project.diagram} />}
+      ) : <ProjectDiagram diagram={project.diagram} diagramLabel={t.projects.diagramLabel} />}
     </Reveal>
   );
 }
 
 function ProjectList() {
+  const { t } = useLang();
   const [preview, setPreview] = useState(null);
 
   return (
     <>
       <ul className="project-list">
-        {projects.map((project, index) => (
+        {t.projects.items.map((project, index) => (
           <ProjectModule project={project} onPreview={setPreview} index={index} key={project.title} />
         ))}
       </ul>
@@ -694,135 +501,166 @@ function Entries({ items }) {
 }
 
 function App() {
+  const [lang, setLang] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("portfolio_lang");
+      if (saved && ["fr", "en", "de"].includes(saved)) return saved;
+      const browser = navigator.language?.slice(0, 2)?.toLowerCase();
+      if (browser === "de") return "de";
+      if (browser === "en") return "en";
+    }
+    return "fr";
+  });
+
+  const t = translations[lang] || translations.fr;
+
+  useEffect(() => {
+    localStorage.setItem("portfolio_lang", lang);
+    document.documentElement.lang = lang === "fr" ? "fr-CH" : lang;
+    if (t?.meta?.title) {
+      document.title = t.meta.title;
+    }
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc && t?.meta?.description) {
+      metaDesc.setAttribute("content", t.meta.description);
+    }
+  }, [lang, t]);
+
   const activeSection = useActiveSection(sectionIds);
 
+  const navItems = [
+    { id: "projets", label: t.nav.projets },
+    { id: "parcours", label: t.nav.parcours },
+    { id: "competences", label: t.nav.competences },
+    { id: "contact", label: t.nav.contact },
+  ];
+
   return (
-    <div className={`site-shell${activeSection === "passions" ? " is-passion" : ""}`}>
-      <header className="site-header" id="accueil">
-        <a className="brand" href="#accueil" aria-label="Kevin Voisin, retour en haut">
-          <span className="brand-name">Kevin Voisin</span>
-          <span className="brand-role">Ingénieur informatique · Valais</span>
-        </a>
-        <nav className="site-nav" aria-label="Navigation principale">
-          {navItems.map((item) => (
-            <a
-              key={item.id}
-              href={`#${item.id}`}
-              className={activeSection === item.id ? "is-active" : undefined}
-              aria-current={activeSection === item.id ? "location" : undefined}
-            >
-              {item.label}
-            </a>
-          ))}
-        </nav>
-        <a className="header-contact" href={`mailto:${EMAIL}`}>Me contacter <span aria-hidden="true"><IconArrowUpRight className="inline-arrow" stroke={1.7} /></span></a>
-      </header>
-      <ScrollJourney active={activeSection} />
-
-      <main>
-      <section className="cover" aria-labelledby="cover-title">
-        <div className="cover-inner">
-          <div className="cover-copy">
-            <p className="cover-kicker">Kevin Voisin · Monthey, Suisse</p>
-            <h1 id="cover-title">
-              <span className="hero-line">Ingénieur</span>
-              <span className="hero-line">informatique</span>
-            </h1>
-            <p className="summary">
-              Diplômé en ingénierie informatique{" "}
-              <a href="https://www.hes-so.ch/" target="_blank" rel="noopener noreferrer">HES-SO</a>.
-              {" "}Stage de cinq mois chez{" "}
-              <a href="https://pickplace.com/" target="_blank" rel="noopener noreferrer">Pick &amp; Place</a>,
-              jusqu’à mon entrée à l’armée en février.
-            </p>
-            <a className="cover-project-link" href="#projets">Projets <IconArrowDown className="inline-arrow" stroke={1.7} aria-hidden="true" /></a>
-          </div>
-          <Portrait />
-        </div>
-      </section>
-
-      <div className="content">
-        <Reveal as="section" id="projets" aria-labelledby="projects-heading">
-          <SectionHeading id="projects-heading" aside={`${String(projects.length).padStart(2, "0")} projets`}>
-            Projets
-          </SectionHeading>
-          <ProjectList />
-        </Reveal>
-
-        <Reveal as="section" id="parcours" aria-labelledby="experience-heading">
-          <div className="two-col">
-            <div>
-              <SectionHeading id="experience-heading">Expérience</SectionHeading>
-              <Entries items={experience} />
-            </div>
-            <div>
-              <SectionHeading id="education-heading">Formation</SectionHeading>
-              <Entries items={education} />
-              <aside className="master-note" aria-labelledby="master-heading">
-                <p className="master-kicker">Après l’armée</p>
-                <h3 id="master-heading">Master en Software Engineering</h3>
-                <p>
-                  HES-SO ou UNIL à Lausanne. Je privilégie une formation à 100 %, tout en restant ouvert à un cursus à 50 % en entreprise.
-                </p>
-              </aside>
-            </div>
-          </div>
-        </Reveal>
-
-        <Reveal as="section" id="competences" aria-labelledby="skills-heading">
-          <SectionHeading id="skills-heading" aside="Français · Anglais B2/C1">
-            Compétences
-          </SectionHeading>
-          <dl className="skill-table">
-            {skills.map((group) => (
-              <div className="skill-row" key={group.label}>
-                <dt>{group.label}</dt>
-                <dd>{group.items.join(" · ")}</dd>
-              </div>
+    <LangContext.Provider value={{ lang, setLang, t }}>
+      <div className={`site-shell${activeSection === "passions" ? " is-passion" : ""}`}>
+        <header className="site-header" id="accueil">
+          <a className="brand" href="#accueil" aria-label={t.brand.backToTop}>
+            <span className="brand-name">{t.brand.name}</span>
+            <span className="brand-role">{t.brand.role}</span>
+          </a>
+          <nav className="site-nav" aria-label="Navigation principale">
+            {navItems.map((item) => (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                className={activeSection === item.id ? "is-active" : undefined}
+                aria-current={activeSection === item.id ? "location" : undefined}
+              >
+                {item.label}
+              </a>
             ))}
-          </dl>
-        </Reveal>
-
-        <Reveal as="section" id="contact" className="contact" aria-labelledby="contact-heading">
-          <SectionHeading id="contact-heading">Contact</SectionHeading>
-          <p className="contact-lead">
-            Un projet informatique en tête ? Web, data, ingénierie logicielle ou autre : parlons-en par e-mail ou sur GitHub et LinkedIn.
-          </p>
-          <div className="contact-details">
-            <CopyEmail />
-            <div className="contact-links">
-              <SlideLink
-                href="https://github.com/kevivois"
-                target="_blank"
-                rel="noreferrer"
-                icon={<IconBrandGithub size={18} stroke={1.7} aria-hidden="true" />}
-              >
-                GitHub
-              </SlideLink>
-              <SlideLink
-                href="https://linkedin.com/in/kevin-voisin"
-                target="_blank"
-                rel="noreferrer"
-                icon={<IconBrandLinkedin size={18} stroke={1.7} aria-hidden="true" />}
-              >
-                LinkedIn
-              </SlideLink>
-            </div>
-            <a className="contact-cv" href="/Voisin_Kevin_CV.pdf" download="Kevin-Voisin-CV.pdf">
-              Télécharger mon CV <IconArrowDown className="inline-arrow" stroke={1.7} aria-hidden="true" />
+          </nav>
+          <div className="header-actions">
+            <LanguageSwitcher current={lang} onChange={setLang} />
+            <a className="header-contact" href={`mailto:${EMAIL}`}>
+              {t.header.contact} <span aria-hidden="true"><IconArrowUpRight className="inline-arrow" stroke={1.7} /></span>
             </a>
           </div>
-        </Reveal>
+        </header>
+        <ScrollJourney active={activeSection} />
 
+        <main>
+          <section className="cover" aria-labelledby="cover-title">
+            <div className="cover-inner">
+              <div className="cover-copy">
+                <p className="cover-kicker">{t.cover.kicker}</p>
+                <h1 id="cover-title">
+                  <span className="hero-line">{t.cover.heroLines[0]}</span>
+                  <span className="hero-line">{t.cover.heroLines[1]}</span>
+                </h1>
+                <p className="summary">{t.cover.summary}</p>
+                <a className="cover-project-link" href="#projets">
+                  {t.cover.projectLink} <IconArrowDown className="inline-arrow" stroke={1.7} aria-hidden="true" />
+                </a>
+              </div>
+              <Portrait />
+            </div>
+          </section>
+
+          <div className="content">
+            <Reveal as="section" id="projets" aria-labelledby="projects-heading">
+              <SectionHeading id="projects-heading" aside={`${String(t.projects.items.length).padStart(2, "0")} ${t.projects.aside}`}>
+                {t.projects.heading}
+              </SectionHeading>
+              <ProjectList />
+            </Reveal>
+
+            <Reveal as="section" id="parcours" aria-labelledby="experience-heading">
+              <div className="two-col">
+                <div>
+                  <SectionHeading id="experience-heading">{t.career.experienceHeading}</SectionHeading>
+                  <Entries items={t.career.experience} />
+                </div>
+                <div>
+                  <SectionHeading id="education-heading">{t.career.educationHeading}</SectionHeading>
+                  <Entries items={t.career.education} />
+                  <aside className="master-note" aria-labelledby="master-heading">
+                    <p className="master-kicker">{t.career.master.kicker}</p>
+                    <h3 id="master-heading">{t.career.master.heading}</h3>
+                    <p>{t.career.master.text}</p>
+                  </aside>
+                </div>
+              </div>
+            </Reveal>
+
+            <Reveal as="section" id="competences" aria-labelledby="skills-heading">
+              <SectionHeading id="skills-heading" aside={t.skills.aside}>
+                {t.skills.heading}
+              </SectionHeading>
+              <dl className="skill-table">
+                {t.skills.groups.map((group) => (
+                  <div className="skill-row" key={group.label}>
+                    <dt>{group.label}</dt>
+                    <dd>{group.items.join(" · ")}</dd>
+                  </div>
+                ))}
+              </dl>
+            </Reveal>
+
+            <Reveal as="section" id="contact" className="contact" aria-labelledby="contact-heading">
+              <SectionHeading id="contact-heading">{t.contact.heading}</SectionHeading>
+              <p className="contact-lead">{t.contact.lead}</p>
+              <div className="contact-details">
+                <CopyEmail />
+                <div className="contact-links">
+                  <SlideLink
+                    href="https://github.com/kevivois"
+                    target="_blank"
+                    rel="noreferrer"
+                    icon={<IconBrandGithub size={18} stroke={1.7} aria-hidden="true" />}
+                  >
+                    GitHub
+                  </SlideLink>
+                  <SlideLink
+                    href="https://linkedin.com/in/kevin-voisin"
+                    target="_blank"
+                    rel="noreferrer"
+                    icon={<IconBrandLinkedin size={18} stroke={1.7} aria-hidden="true" />}
+                  >
+                    LinkedIn
+                  </SlideLink>
+                </div>
+                <a className="contact-cv" href="/Voisin_Kevin_CV.pdf" download="Kevin-Voisin-CV.pdf">
+                  {t.contact.cvDownload} <IconArrowDown className="inline-arrow" stroke={1.7} aria-hidden="true" />
+                </a>
+              </div>
+            </Reveal>
+
+          </div>
+          <PassionsSection />
+          <footer className="page-footer content">
+            <span>{t.footer.copyright}</span>
+            <span>{t.footer.location}</span>
+            <a href="#accueil">{t.footer.top} <IconArrowUp className="inline-arrow" stroke={1.7} aria-hidden="true" /></a>
+          </footer>
+        </main>
       </div>
-      <PassionsSection />
-      <footer className="page-footer content">
-        <span>© 2026 Kevin Voisin</span>
-        <span>Conçu &amp; développé en Valais</span>
-        <a href="#accueil">Haut de page <IconArrowUp className="inline-arrow" stroke={1.7} aria-hidden="true" /></a>
-      </footer>
-      </main>
-    </div>
+    </LangContext.Provider>
   );
 }
 
