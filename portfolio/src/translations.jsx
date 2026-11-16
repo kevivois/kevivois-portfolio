@@ -65,26 +65,6 @@ export const translations = {
       linksLabel: "Liens pour",
       items: [
         {
-          type: "Application web",
-          title: "StudEase",
-          description:
-            "Mandat réalisé au sein de la Junior Entreprise Valais (JEVS) pour des étudiants en gestion de la HES-SO Valais-Wallis à Sierre, dans le cadre du cours Business Experience (BEX). Cette plateforme suisse met en relation étudiants et entreprises : recherche d’offres, favoris et suivi des candidatures.",
-          stack: ["React", "Next.js", "Supabase", "PostgreSQL"],
-          evidence: { label: "Implémentation", value: "Authentification JWT et base de données PostgreSQL." },
-          image: {
-            src: "/studease-project.webp",
-            srcSet: "/studease-project-960.webp 960w, /studease-project.webp 2880w",
-            alt: "Page de présentation StudEase : opportunités pour étudiants et entreprises suisses",
-            width: 2880,
-            height: 1800,
-          },
-          links: [
-            { label: "Démo", href: "https://stud-easy.vercel.app/info", kind: "website" },
-            { label: "Business Experience", href: "https://www.hevs.ch/fr/hautes-ecoles/haute-ecole-de-gestion/business-experience/", kind: "website" },
-            { label: "JEVS", href: "http://jevs.ch/", kind: "website" },
-          ],
-        },
-        {
           type: "Plateforme data · Suisse",
           title: "EstimEat",
           description:
@@ -382,26 +362,6 @@ export const translations = {
       linksLabel: "Links for",
       items: [
         {
-          type: "Web application",
-          title: "StudEase",
-          description:
-            "Client project completed within Junior Entreprise Valais (JEVS) for business management students at HES-SO Valais-Wallis in Sierre as part of the Business Experience (BEX) course. This Swiss platform connects students and companies: opportunity search, bookmarks, and application tracking.",
-          stack: ["React", "Next.js", "Supabase", "PostgreSQL"],
-          evidence: { label: "Implementation", value: "JWT authentication and PostgreSQL database." },
-          image: {
-            src: "/studease-project.webp",
-            srcSet: "/studease-project-960.webp 960w, /studease-project.webp 2880w",
-            alt: "StudEase overview page: opportunities for Swiss students and companies",
-            width: 2880,
-            height: 1800,
-          },
-          links: [
-            { label: "Live Demo", href: "https://stud-easy.vercel.app/info", kind: "website" },
-            { label: "Business Experience", href: "https://www.hevs.ch/fr/hautes-ecoles/haute-ecole-de-gestion/business-experience/", kind: "website" },
-            { label: "JEVS", href: "http://jevs.ch/", kind: "website" },
-          ],
-        },
-        {
           type: "Data platform · Switzerland",
           title: "EstimEat",
           description:
@@ -698,26 +658,6 @@ export const translations = {
       stackLabel: "Technologien",
       linksLabel: "Links für",
       items: [
-        {
-          type: "Webanwendung",
-          title: "StudEase",
-          description:
-            "Auftrag bei der Junior Entreprise Valais (JEVS) für Studierende der Betriebsökonomie an der HES-SO Valais-Wallis in Siders im Rahmen des Kurses Business Experience (BEX). Diese Schweizer Plattform verbindet Studierende und Unternehmen: Stellensuche, Favoriten und Bewerbungsverfolgung.",
-          stack: ["React", "Next.js", "Supabase", "PostgreSQL"],
-          evidence: { label: "Implementierung", value: "JWT-Authentifizierung und PostgreSQL-Datenbank." },
-          image: {
-            src: "/studease-project.webp",
-            srcSet: "/studease-project-960.webp 960w, /studease-project.webp 2880w",
-            alt: "StudEase Übersichtsseite: Chancen für Schweizer Studierende und Unternehmen",
-            width: 2880,
-            height: 1800,
-          },
-          links: [
-            { label: "Live-Demo", href: "https://stud-easy.vercel.app/info", kind: "website" },
-            { label: "Business Experience", href: "https://www.hevs.ch/fr/hautes-ecoles/haute-ecole-de-gestion/business-experience/", kind: "website" },
-            { label: "JEVS", href: "http://jevs.ch/", kind: "website" },
-          ],
-        },
         {
           type: "Datenplattform · Schweiz",
           title: "EstimEat",
