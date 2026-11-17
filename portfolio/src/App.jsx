@@ -264,7 +264,10 @@ function PassionsSection() {
                   <button
                     className="passion-image-button"
                     type="button"
-                    onClick={() => setPreviewIndex(passions.findIndex((item) => item.id === photo.id))}
+                    onClick={() => {
+                      setPreviewIndex(passions.findIndex((item) => item.id === photo.id));
+                      analytics.imageZoom(`Passion : ${photo.caption || photo.alt}`);
+                    }}
                     aria-label={`${t.passions.viewLargeAria} ${photo.caption}`}
                     aria-haspopup="dialog"
                   >
@@ -318,7 +321,10 @@ function Portrait() {
         <button
           type="button"
           className="portrait-image-button"
-          onClick={() => setPreviewOpen(true)}
+          onClick={() => {
+            setPreviewOpen(true);
+            analytics.imageZoom("Portrait Kevin");
+          }}
           aria-label={t.cover.portraitAria}
           aria-haspopup="dialog"
         >
@@ -430,7 +436,10 @@ function ProjectModule({ project, onPreview, index }) {
         <button
           type="button"
           className="project-visual project-image-button"
-          onClick={() => onPreview(project)}
+          onClick={() => {
+            onPreview(project);
+            analytics.imageZoom(`Projet : ${project.title}`);
+          }}
           aria-label={`${actionLabel} : ${project.title}`}
           aria-haspopup="dialog"
         >

@@ -2,24 +2,6 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-// Coordonnées de secours pour quelques grandes villes si les événements existants n'ont pas encore lat/lng
-const CITY_FALLBACK_COORDS = {
-  Sion: [46.233, 7.36],
-  Monthey: [46.2558, 6.9492],
-  Martigny: [46.1028, 7.0736],
-  Lausanne: [46.5197, 6.6323],
-  Genève: [46.2044, 6.1432],
-  Zurich: [47.3769, 8.5417],
-  Bâle: [47.5596, 7.5886],
-  Berne: [46.948, 7.4474],
-  Valais: [46.233, 7.36],
-  Paris: [48.8566, 2.3522],
-  Lyon: [45.764, 4.8357],
-  Berlin: [52.52, 13.405],
-  Londres: [51.5074, -0.1278],
-  "New York": [40.7128, -74.006],
-};
-
 export function InteractiveMap({ events }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -37,9 +19,6 @@ export function InteractiveMap({ events }) {
         maxZoom: 18,
         scrollWheelZoom: true,
       });
-
-      // Si une clé Carto est définie dans .env (VITE_CARTO_API_KEY ou CARTO_API_KEY), on l'utilise avec le paramètre ?key=
-      // Sinon, on bascule automatiquement sur Esri World Light Gray (100% gratuit, sans clé, épuré et minimaliste).
       const rawCartoKey = import.meta.env.VITE_CARTO_API_KEY || import.meta.env.CARTO_API_KEY;
       const cartoKey = rawCartoKey ? rawCartoKey.trim().replace(/^['"]|['"]$/g, "") : null;
 
@@ -82,21 +61,15 @@ export function InteractiveMap({ events }) {
     // Supprimer les anciens calques de marqueurs
     const markersLayer = L.featureGroup();
 
-    // Regrouper les événements par localisation
+    // Regrouper les événements par localisation (uniquement coordonnées réelles valides, zéro supposition)
     const locationMap = new Map();
 
     events.forEach((evt) => {
-      let lat = evt.latitude ? parseFloat(evt.latitude) : null;
-      let lng = evt.longitude ? parseFloat(evt.longitude) : null;
+      const lat = evt.latitude ? parseFloat(evt.latitude) : null;
+      const lng = evt.longitude ? parseFloat(evt.longitude) : null;
 
-      // Utilisation du fallback si coordonnée absente
-      if ((!lat || !lng) && evt.city && CITY_FALLBACK_COORDS[evt.city]) {
-        [lat, lng] = CITY_FALLBACK_COORDS[evt.city];
-      } else if ((!lat || !lng) && evt.country_code === "CH") {
-        [lat, lng] = [46.233, 7.36]; // Valais / Suisse
-      }
-
-      if (lat && lng) {
+      // Zéro fallback : on n'affiche que les points ayant des coordonnées GPS réelles et confirmées
+      if (typeof lat === "number" && !isNaN(lat) && typeof lng === "number" && !isNaN(lng)) {
         const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
         if (!locationMap.has(key)) {
           locationMap.set(key, {
@@ -104,8 +77,8 @@ export function InteractiveMap({ events }) {
             lng,
             count: 0,
             city: evt.city || "Emplacement détecté",
-            country: evt.country || (evt.country_code === "CH" ? "Suisse" : evt.country_code),
-            country_code: evt.country_code || "CH",
+            country: evt.country || evt.country_code || "Inconnu",
+            country_code: evt.country_code || "",
           });
         }
         locationMap.get(key).count++;

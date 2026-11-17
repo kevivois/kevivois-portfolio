@@ -25,6 +25,11 @@ import {
   IconHome,
   IconBriefcase,
   IconTarget,
+  IconPhoto,
+  IconSearch,
+  IconX,
+  IconInfoCircle,
+  IconExternalLink,
 } from "@tabler/icons-react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isLikelyCompany } from "../lib/analytics";
@@ -39,6 +44,29 @@ function getCountryFlag(code) {
     return String.fromCodePoint(...codePoints);
   } catch {
     return "🌐";
+  }
+}
+
+function getEventBadgeInfo(type) {
+  switch (type) {
+    case "page_view":
+      return { label: "Page vue", color: "blue", icon: "👁️" };
+    case "image_zoom":
+      return { label: "Zoom image", color: "yellow", icon: "🔍" };
+    case "cv_download":
+      return { label: "Téléchargement CV", color: "amber", icon: "📄" };
+    case "contact_click":
+      return { label: "Clic contact", color: "green", icon: "✉️" };
+    case "outbound_click":
+      return { label: "Lien sortant", color: "purple", icon: "↗️" };
+    case "nav_click":
+      return { label: "Navigation ancre", color: "gray", icon: "⚓" };
+    case "scroll_depth":
+      return { label: "Lecture de page", color: "emerald", icon: "📜" };
+    case "session_ping":
+      return { label: "Temps passé", color: "orange", icon: "⏱️" };
+    default:
+      return { label: type, color: "gray", icon: "⚡" };
   }
 }
 
@@ -57,6 +85,28 @@ export function AdminPage({ onBack }) {
   // Mode Live (Temps réel)
   const [liveMode, setLiveMode] = useState(true);
   const [newLiveEventId, setNewLiveEventId] = useState(null);
+
+  // Inspection approfondie d'un événement
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [feedSearch, setFeedSearch] = useState("");
+  const [feedFilterType, setFeedFilterType] = useState("all");
+
+  // Filtrage dynamique du flux en direct
+  const filteredRecentEvents = useMemo(() => {
+    return events.slice(0, 50).filter((evt) => {
+      if (feedFilterType === "company") {
+        const isComp = typeof evt.is_company === "boolean" ? evt.is_company : isLikelyCompany(evt.organization, evt.isp);
+        if (!isComp) return false;
+      } else if (feedFilterType !== "all" && evt.event_type !== feedFilterType) {
+        return false;
+      }
+
+      if (!feedSearch.trim()) return true;
+      const q = feedSearch.toLowerCase();
+      const targetStr = `${evt.city || ""} ${evt.region || ""} ${evt.country || ""} ${evt.country_code || ""} ${evt.organization || ""} ${evt.isp || ""} ${evt.page_path || ""} ${evt.event_label || ""} ${evt.event_type || ""} ${evt.campaign_ref || ""}`.toLowerCase();
+      return targetStr.includes(q);
+    });
+  }, [events, feedSearch, feedFilterType]);
 
   // Vérifier la session active Supabase
   useEffect(() => {
@@ -171,6 +221,10 @@ export function AdminPage({ onBack }) {
     const cvDownloads = events.filter((e) => e.event_type === "cv_download").length;
     const contactClicks = events.filter((e) => e.event_type === "contact_click").length;
     const outboundClicks = events.filter((e) => e.event_type === "outbound_click").length;
+    const imageZooms = events.filter((e) => e.event_type === "image_zoom").length;
+    const allClicks = events.filter((e) =>
+      ["outbound_click", "contact_click", "link_click", "nav_click", "image_zoom", "cv_download"].includes(e.event_type)
+    ).length;
 
     // Calcul de la durée moyenne passée sur le site
     const durations = events
@@ -215,11 +269,12 @@ export function AdminPage({ onBack }) {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6);
 
-    // Géographie (Pays & Villes)
+    // Géographie (Pays & Villes) - Zéro fallback qui fausse les données réelles
     const countriesData = {};
     events.forEach((e) => {
-      const code = e.country_code || "CH";
-      const name = e.country || "Suisse";
+      if (!e.country_code && !e.country) return;
+      const code = e.country_code || "??";
+      const name = e.country || (code !== "??" ? code : "Non localisé");
       if (!countriesData[code]) {
         countriesData[code] = { code, name, count: 0, cities: new Set() };
       }
@@ -239,9 +294,9 @@ export function AdminPage({ onBack }) {
       const org = e.organization || e.isp;
       if (!org || org === "unknown" || org === "Opérateur suisse") return;
       const isComp = typeof e.is_company === "boolean" ? e.is_company : isLikelyCompany(e.organization, e.isp);
-      if (isComp) {
+      if (isComp === true) {
         companiesCount[org] = (companiesCount[org] || 0) + 1;
-      } else {
+      } else if (isComp === false) {
         ispsCount[org] = (ispsCount[org] || 0) + 1;
       }
     });
@@ -254,11 +309,12 @@ export function AdminPage({ onBack }) {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6);
 
-    // Connectivité réseau (4G/5G, Wi-Fi/Fibre, débits)
+    // Connectivité réseau (4G/5G, Wi-Fi/Fibre, débits mesurés)
     const connCount = {};
     events.forEach((e) => {
-      const conn = e.connection_type || "Wi-Fi / Haut débit";
-      connCount[conn] = (connCount[conn] || 0) + 1;
+      if (e.connection_type) {
+        connCount[e.connection_type] = (connCount[e.connection_type] || 0) + 1;
+      }
     });
     const topConnections = Object.entries(connCount)
       .sort((a, b) => b[1] - a[1])
@@ -320,6 +376,8 @@ export function AdminPage({ onBack }) {
       cvDownloads,
       contactClicks,
       outboundClicks,
+      imageZooms,
+      allClicks,
       avgDurationText: formatDuration(avgDurationSec),
       avgScroll: avgScroll ? `${avgScroll}%` : "Non mesuré",
       activeNow,
@@ -575,10 +633,18 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
 
                 <div className="admin-metric-card">
                   <div className="admin-metric-head">
-                    <span className="admin-metric-label">Clics contact &amp; liens</span>
+                    <span className="admin-metric-label">Zooms d'images</span>
+                    <IconPhoto size={18} stroke={1.7} />
+                  </div>
+                  <strong className="admin-metric-number">{stats.imageZooms}</strong>
+                </div>
+
+                <div className="admin-metric-card">
+                  <div className="admin-metric-head">
+                    <span className="admin-metric-label">Tous les clics &amp; actions</span>
                     <IconArrowUpRight size={18} stroke={1.7} />
                   </div>
-                  <strong className="admin-metric-number">{stats.contactClicks + stats.outboundClicks}</strong>
+                  <strong className="admin-metric-number">{stats.allClicks}</strong>
                 </div>
               </div>
 
@@ -872,62 +938,125 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                 </div>
               </div>
 
-              {/* Journal d’activité récent (avec animation pour les nouveaux événements en direct) */}
+              {/* Journal d’activité enrichi avec recherche, filtres et inspection détaillée */}
               <div className="admin-panel-card admin-feed-section">
-                <div className="section-heading">
-                  <h3 className="admin-panel-title">Flux d’activité en direct</h3>
-                  <span className="section-aside">Derniers 30 événements</span>
+                <div className="section-heading feed-head-wrap">
+                  <div>
+                    <h3 className="admin-panel-title">Flux d’activité détaillé</h3>
+                    <span className="section-aside">
+                      {filteredRecentEvents.length} événement{filteredRecentEvents.length > 1 ? "s" : ""} affiché{filteredRecentEvents.length > 1 ? "s" : ""} · Cliquez sur une ligne pour voir tous les détails
+                    </span>
+                  </div>
+
+                  {/* Barre de recherche et filtres rapides */}
+                  <div className="feed-controls-row">
+                    <div className="feed-search-box">
+                      <IconSearch size={14} stroke={1.8} className="feed-search-icon" />
+                      <input
+                        type="text"
+                        placeholder="Filtrer par ville, entreprise, page, appareil..."
+                        value={feedSearch}
+                        onChange={(e) => setFeedSearch(e.target.value)}
+                        className="feed-search-input"
+                      />
+                      {feedSearch && (
+                        <button type="button" className="feed-search-clear" onClick={() => setFeedSearch("")}>
+                          <IconX size={12} stroke={2} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="feed-filter-pills" role="group" aria-label="Filtrer par type">
+                      {[
+                        { id: "all", label: "Tous" },
+                        { id: "company", label: "🏢 Entreprises" },
+                        { id: "image_zoom", label: "🔍 Zooms" },
+                        { id: "page_view", label: "👁️ Vues" },
+                        { id: "cv_download", label: "📄 CV" },
+                        { id: "contact_click", label: "✉️ Contact" },
+                        { id: "outbound_click", label: "↗️ Liens" },
+                      ].map((tab) => (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          className={`feed-filter-tab${feedFilterType === tab.id ? " is-active" : ""}`}
+                          onClick={() => setFeedFilterType(tab.id)}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                {stats.recentEvents.length === 0 ? (
-                  <p className="admin-empty-note">Aucun événement enregistré.</p>
+
+                {filteredRecentEvents.length === 0 ? (
+                  <p className="admin-empty-note">
+                    {feedSearch ? `Aucun événement ne correspond à « ${feedSearch} ».` : "Aucun événement enregistré."}
+                  </p>
                 ) : (
                   <div className="admin-table-container">
-                    <table className="admin-table">
+                    <table className="admin-table interactive-feed-table">
                       <thead>
                         <tr>
                           <th>Date / Heure</th>
                           <th>Événement</th>
                           <th>Localisation &amp; Réseau</th>
-                          <th>Page / Cible</th>
-                          <th>Détail / Engagement</th>
-                          <th>Appareil &amp; Connectivité</th>
-                          <th>Langue</th>
+                          <th>Page consultée</th>
+                          <th>Détail / Action</th>
+                          <th>Appareil &amp; Vitesse</th>
+                          <th>Source / Référent</th>
+                          <th style={{ textAlign: "right" }}>Détails</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {stats.recentEvents.map((evt) => {
+                        {filteredRecentEvents.map((evt) => {
                           const isComp = typeof evt.is_company === "boolean"
                             ? evt.is_company
                             : isLikelyCompany(evt.organization, evt.isp);
                           const orgLabel = evt.organization || evt.isp;
+                          const badge = getEventBadgeInfo(evt.event_type);
 
                           return (
                             <tr
                               key={evt.id}
-                              className={evt.id === newLiveEventId ? "row-live-highlight" : ""}
+                              className={`feed-row-clickable${evt.id === newLiveEventId ? " row-live-highlight" : ""}${selectedEvent?.id === evt.id ? " is-selected-row" : ""}`}
+                              onClick={() => setSelectedEvent(evt)}
+                              title="Cliquez pour inspecter tous les détails de cette visite"
                             >
                               <td className="cell-mono cell-time">
-                                {new Date(evt.created_at).toLocaleTimeString("fr-CH", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  second: "2-digit",
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                })}
-                              </td>
-                              <td>
-                                <span className={`admin-badge-type badge-${evt.event_type}`}>
-                                  {evt.event_type}
+                                <div>
+                                  {new Date(evt.created_at).toLocaleTimeString("fr-CH", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    second: "2-digit",
+                                  })}
+                                </div>
+                                <span className="cell-sub-date">
+                                  {new Date(evt.created_at).toLocaleDateString("fr-CH", {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                  })}
                                 </span>
                               </td>
+
+                              <td>
+                                <span className={`admin-badge-type badge-${evt.event_type}`}>
+                                  {badge.icon} {badge.label}
+                                </span>
+                              </td>
+
                               <td className="cell-location">
-                                <div>
+                                <div className="location-flag-text">
                                   {evt.country_code ? (
                                     <span>
-                                      {getCountryFlag(evt.country_code)} {evt.city ? `${evt.city}` : ""}{evt.region ? ` (${evt.region})` : ""}, {evt.country_code}
+                                      {getCountryFlag(evt.country_code)}{" "}
+                                      <strong>{evt.city || "Emplacement"}</strong>
+                                      {evt.region ? ` (${evt.region})` : ""}
+                                      {evt.postal ? ` ${evt.postal}` : ""}
+                                      {evt.country_code ? `, ${evt.country_code}` : ""}
                                     </span>
                                   ) : (
-                                    <span className="cell-muted">-</span>
+                                    <span className="cell-muted">Non géolocalisé</span>
                                   )}
                                 </div>
                                 {orgLabel && (
@@ -939,14 +1068,16 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                                   </span>
                                 )}
                               </td>
+
                               <td className="cell-mono cell-path">
-                                {evt.page_path || "/"}
+                                <span>{evt.page_path || "/"}</span>
                                 {evt.campaign_ref && (
                                   <span className="cell-camp-tag" title="Paramètre de campagne">
                                     ?ref={evt.campaign_ref}
                                   </span>
                                 )}
                               </td>
+
                               <td>
                                 {evt.duration_seconds ? (
                                   <span className="cell-duration-tag">
@@ -957,16 +1088,36 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                                     Scroll {evt.scroll_depth}%
                                   </span>
                                 ) : (
-                                  evt.event_label || "-"
+                                  <span className="cell-label-text">{evt.event_label || "-"}</span>
                                 )}
                               </td>
+
                               <td className="cell-muted">
                                 <div>{evt.device_type} · {evt.browser}</div>
                                 {evt.connection_type && (
                                   <div className="cell-conn-info">📶 {evt.connection_type}</div>
                                 )}
                               </td>
-                              <td className="cell-mono cell-muted">{evt.user_language || "-"}</td>
+
+                              <td className="cell-mono cell-muted">
+                                <span>{evt.referrer && evt.referrer !== "internal" ? evt.referrer : "Accès direct"}</span>
+                                {evt.user_language && (
+                                  <span className="cell-lang-tag">[{evt.user_language}]</span>
+                                )}
+                              </td>
+
+                              <td style={{ textAlign: "right" }}>
+                                <button
+                                  type="button"
+                                  className="feed-inspect-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedEvent(evt);
+                                  }}
+                                >
+                                  Inspecter
+                                </button>
+                              </td>
                             </tr>
                           );
                         })}
@@ -975,6 +1126,212 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                   </div>
                 )}
               </div>
+
+              {/* MODAL / TIROIR D'INSPECTION DÉTAILLÉE D'UN ÉVÉNEMENT */}
+              {selectedEvent && (
+                <div className="admin-inspect-overlay" onClick={() => setSelectedEvent(null)}>
+                  <div className="admin-inspect-modal" onClick={(e) => e.stopPropagation()}>
+                    <div className="inspect-modal-header">
+                      <div className="inspect-header-left">
+                        <span className={`admin-badge-type badge-${selectedEvent.event_type}`}>
+                          {getEventBadgeInfo(selectedEvent.event_type).icon} {getEventBadgeInfo(selectedEvent.event_type).label}
+                        </span>
+                        <h3 className="inspect-title">Détails complets de la visite</h3>
+                      </div>
+                      <button
+                        type="button"
+                        className="inspect-close-btn"
+                        onClick={() => setSelectedEvent(null)}
+                        aria-label="Fermer"
+                      >
+                        <IconX size={18} stroke={2} />
+                      </button>
+                    </div>
+
+                    <div className="inspect-modal-body">
+                      {/* Horodatage & Identifiant de session */}
+                      <div className="inspect-banner-info">
+                        <div>
+                          <span className="inspect-meta-label">Horodatage précis</span>
+                          <strong>
+                            {new Date(selectedEvent.created_at).toLocaleDateString("fr-CH", {
+                              weekday: "long",
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            })}{" "}
+                            à{" "}
+                            {new Date(selectedEvent.created_at).toLocaleTimeString("fr-CH", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              second: "2-digit",
+                            })}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="inspect-meta-label">Session anonyme ID</span>
+                          <code className="inspect-session-id">{selectedEvent.session_id || "s_anonyme"}</code>
+                        </div>
+                      </div>
+
+                      {/* 4 Blocs de détails structurés */}
+                      <div className="inspect-grid">
+                        {/* Bloc 1 : Localisation */}
+                        <div className="inspect-card">
+                          <h4 className="inspect-card-title">
+                            <IconMapPin size={15} stroke={1.8} /> Localisation géographique
+                          </h4>
+                          <ul className="inspect-detail-list">
+                            <li>
+                              <span>Pays</span>
+                              {selectedEvent.country || selectedEvent.country_code ? (
+                                <strong>{getCountryFlag(selectedEvent.country_code)} {selectedEvent.country || selectedEvent.country_code} {selectedEvent.country_code ? `(${selectedEvent.country_code})` : ""}</strong>
+                              ) : (
+                                <span className="cell-muted">Non localisé</span>
+                              )}
+                            </li>
+                            <li>
+                              <span>Ville</span>
+                              <strong>{selectedEvent.city || "Non spécifiée"}</strong>
+                            </li>
+                            <li>
+                              <span>Canton / Région</span>
+                              <strong>{selectedEvent.region || "Non spécifié"}</strong>
+                            </li>
+                            <li>
+                              <span>Code postal</span>
+                              <strong>{selectedEvent.postal || "Non spécifié"}</strong>
+                            </li>
+                            {selectedEvent.latitude && selectedEvent.longitude ? (
+                              <li>
+                                <span>Coordonnées GPS</span>
+                                <a
+                                  href={`https://www.openstreetmap.org/?mlat=${selectedEvent.latitude}&mlon=${selectedEvent.longitude}#map=14/${selectedEvent.latitude}/${selectedEvent.longitude}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inspect-map-link"
+                                >
+                                  {Number(selectedEvent.latitude).toFixed(4)}, {Number(selectedEvent.longitude).toFixed(4)} <IconExternalLink size={12} stroke={1.7} />
+                                </a>
+                              </li>
+                            ) : (
+                              <li>
+                                <span>Coordonnées GPS</span>
+                                <span className="cell-muted">Non disponibles</span>
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+
+                        {/* Bloc 2 : Réseau & Organisation */}
+                        <div className="inspect-card">
+                          <h4 className="inspect-card-title">
+                            <IconBuilding size={15} stroke={1.8} /> Réseau &amp; Organisation
+                          </h4>
+                          <ul className="inspect-detail-list">
+                            <li>
+                              <span>Organisation / FAI</span>
+                              <strong>{selectedEvent.organization || selectedEvent.isp || "Opérateur non identifié"}</strong>
+                            </li>
+                            <li>
+                              <span>Type de réseau</span>
+                              {(() => {
+                                const isComp = typeof selectedEvent.is_company === "boolean" ? selectedEvent.is_company : isLikelyCompany(selectedEvent.organization, selectedEvent.isp);
+                                if (isComp === true) return <span className="cell-org-badge is-pro">🏢 Entreprise / Pro</span>;
+                                if (isComp === false) return <span className="cell-org-badge is-isp">🏠 Wi-Fi Particulier / FAI</span>;
+                                return <span className="cell-muted">Non identifié</span>;
+                              })()}
+                            </li>
+                            <li>
+                              <span>Fournisseur d'accès (ISP)</span>
+                              <strong>{selectedEvent.isp || "-"}</strong>
+                            </li>
+                            <li>
+                              <span>Connectivité réseau</span>
+                              <strong>{selectedEvent.connection_type || "Non mesurée (Safari/Firefox)"}</strong>
+                            </li>
+                          </ul>
+                        </div>
+
+                        {/* Bloc 3 : Matériel & Navigateur */}
+                        <div className="inspect-card">
+                          <h4 className="inspect-card-title">
+                            <IconDeviceDesktop size={15} stroke={1.8} /> Matériel &amp; Navigateur
+                          </h4>
+                          <ul className="inspect-detail-list">
+                            <li>
+                              <span>Type d'appareil</span>
+                              <strong>{selectedEvent.device_type === "mobile" ? "📱 Smartphone" : selectedEvent.device_type === "tablet" ? "📱 Tablette" : "💻 Ordinateur"}</strong>
+                            </li>
+                            <li>
+                              <span>Système d'exploitation (OS)</span>
+                              <strong>{selectedEvent.os || "Inconnu"}</strong>
+                            </li>
+                            <li>
+                              <span>Navigateur</span>
+                              <strong>{selectedEvent.browser || "Inconnu"}</strong>
+                            </li>
+                            <li>
+                              <span>Résolution d'écran</span>
+                              <code>{selectedEvent.screen_res || "Non mesurée"}</code>
+                            </li>
+                            <li>
+                              <span>Langue du système</span>
+                              <code>{selectedEvent.user_language || "fr"}</code>
+                            </li>
+                          </ul>
+                        </div>
+
+                        {/* Bloc 4 : Navigation & Engagement */}
+                        <div className="inspect-card">
+                          <h4 className="inspect-card-title">
+                            <IconActivity size={15} stroke={1.8} /> Contexte &amp; Engagement
+                          </h4>
+                          <ul className="inspect-detail-list">
+                            <li>
+                              <span>Page consultée</span>
+                              <code className="cell-path">{selectedEvent.page_path || "/"}</code>
+                            </li>
+                            <li>
+                              <span>Source d'arrivée (Referrer)</span>
+                              <strong>{selectedEvent.referrer || "Accès direct"}</strong>
+                            </li>
+                            <li>
+                              <span>Lien de campagne (?ref=)</span>
+                              <strong>{selectedEvent.campaign_ref ? `?ref=${selectedEvent.campaign_ref}` : "Aucune campagne"}</strong>
+                            </li>
+                            <li>
+                              <span>Temps passé sur le site</span>
+                              <strong>{selectedEvent.duration_seconds ? `${selectedEvent.duration_seconds} secondes` : "Non mesuré"}</strong>
+                            </li>
+                            <li>
+                              <span>Profondeur de lecture</span>
+                              <strong>{selectedEvent.scroll_depth ? `${selectedEvent.scroll_depth}% de la page` : "Non mesuré"}</strong>
+                            </li>
+                            {selectedEvent.event_label && (
+                              <li>
+                                <span>Libellé / Détail d'action</span>
+                                <strong>{selectedEvent.event_label}</strong>
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="inspect-modal-footer">
+                      <span className="inspect-footer-note">Données enregistrées en temps réel dans votre base Supabase</span>
+                      <button
+                        type="button"
+                        className="inspect-done-btn"
+                        onClick={() => setSelectedEvent(null)}
+                      >
+                        Fermer
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

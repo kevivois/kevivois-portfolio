@@ -86,47 +86,23 @@ async function getGeoLocation() {
     } catch {}
   }
 
-  // 2. Fallback par défaut basé sur le fuseau horaire
-  let fallbackGeo = {
-    country: "Suisse",
-    country_code: "CH",
-    city: "Valais",
-    region: "Valais",
-    postal: "1950",
-    latitude: 46.233,
-    longitude: 7.36,
-    isp: "Opérateur suisse",
-    organization: null,
-  };
-  try {
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-    if (tz.includes("Zurich"))
-      fallbackGeo = { ...fallbackGeo, city: "Zurich", region: "Zurich", latitude: 47.3769, longitude: 8.5417 };
-    else if (tz.includes("Paris"))
-      fallbackGeo = { country: "France", country_code: "FR", city: "Paris", region: "Île-de-France", postal: "75000", latitude: 48.8566, longitude: 2.3522, isp: "Opérateur français", organization: null };
-    else if (tz.includes("Berlin"))
-      fallbackGeo = { country: "Allemagne", country_code: "DE", city: "Berlin", region: "Berlin", postal: "10115", latitude: 52.52, longitude: 13.405, isp: "Opérateur allemand", organization: null };
-    else if (tz.includes("London"))
-      fallbackGeo = { country: "Royaume-Uni", country_code: "GB", city: "Londres", region: "Greater London", postal: "SW1A", latitude: 51.5074, longitude: -0.1278, isp: "Opérateur UK", organization: null };
-  } catch {}
-
-  // 3. Appel de l'API ipwho.is (timeout 1.2s max pour ne pas ralentir le site)
+  // 2. Appel de l'API ipwho.is (timeout 1.5s max pour ne pas ralentir le chargement)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
     const res = await fetch("https://ipwho.is/", { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
       const data = await res.json();
       if (data && data.success !== false) {
         cachedGeo = {
-          country: data.country || fallbackGeo.country,
-          country_code: data.country_code || fallbackGeo.country_code,
-          city: data.city || fallbackGeo.city,
+          country: data.country || null,
+          country_code: data.country_code || null,
+          city: data.city || null,
           region: data.region || null,
           postal: data.postal || null,
-          latitude: typeof data.latitude === "number" ? data.latitude : fallbackGeo.latitude,
-          longitude: typeof data.longitude === "number" ? data.longitude : fallbackGeo.longitude,
+          latitude: typeof data.latitude === "number" ? data.latitude : null,
+          longitude: typeof data.longitude === "number" ? data.longitude : null,
           isp: data.connection?.isp || null,
           organization: data.connection?.org || data.connection?.isp || null,
         };
@@ -136,7 +112,18 @@ async function getGeoLocation() {
     }
   } catch {}
 
-  cachedGeo = fallbackGeo;
+  // En cas d'échec ou d'adblocker : AUCUN fallback artificiel pour ne pas fausser les métriques réelles
+  cachedGeo = {
+    country: null,
+    country_code: null,
+    city: null,
+    region: null,
+    postal: null,
+    latitude: null,
+    longitude: null,
+    isp: null,
+    organization: null,
+  };
   sessionStorage.setItem("kv_analytics_geo", JSON.stringify(cachedGeo));
   return cachedGeo;
 }
@@ -151,8 +138,8 @@ const CONSUMER_ISP_PATTERNS = [
 ];
 
 export function isLikelyCompany(org, isp) {
-  const target = (org || isp || "").toLowerCase();
-  if (!target || target === "unknown" || target.includes("opérateur")) return false;
+  const target = (org || isp || "").trim().toLowerCase();
+  if (!target || target === "unknown" || target.includes("opérateur")) return null;
   const isConsumerIsp = CONSUMER_ISP_PATTERNS.some((pattern) => target.includes(pattern));
   return !isConsumerIsp;
 }
@@ -325,12 +312,23 @@ export function initEngagementTracking() {
   document.addEventListener("visibilitychange", handleVisibility);
   window.addEventListener("pagehide", sendTimeSpent);
 
-  // 3. Détection automatique des clics sur les liens sortants
+  // 3. Détection automatique des clics sur n'importe quel lien et agrandissements d'images
   const handleClick = (e) => {
+    // A. Détection des clics sur les images / agrandissements
+    const imgEl = e.target.closest("img, button[aria-haspopup='dialog'], .passion-photo, .project-preview");
+    if (imgEl) {
+      const img = imgEl.tagName === "IMG" ? imgEl : imgEl.querySelector("img");
+      const label = img?.alt || imgEl.getAttribute("aria-label") || imgEl.title || "Image";
+      trackEvent("image_zoom", `Zoom : ${label}`);
+      return;
+    }
+
+    // B. Détection de TOUS les liens <a>
     const link = e.target.closest("a");
     if (!link) return;
 
     const href = link.getAttribute("href") || "";
+    const text = link.innerText?.trim() || link.getAttribute("aria-label") || href;
 
     if (href.includes("github.com")) {
       trackEvent("outbound_click", "GitHub");
@@ -340,11 +338,18 @@ export function initEngagementTracking() {
       trackEvent("cv_download", "CV PDF");
     } else if (href.startsWith("mailto:")) {
       trackEvent("contact_click", "Email mailto");
+    } else if (href.startsWith("#")) {
+      // Lien d'ancrage / navigation interne (ex: #projets, #competences)
+      trackEvent("nav_click", `Menu : ${href.replace("#", "")}`);
     } else if (href.startsWith("http") && !href.includes(window.location.hostname)) {
       try {
         const domain = new URL(href).hostname.replace(/^www\./, "");
-        trackEvent("outbound_click", domain);
-      } catch {}
+        trackEvent("outbound_click", `${text} (${domain})`);
+      } catch {
+        trackEvent("outbound_click", text);
+      }
+    } else if (href) {
+      trackEvent("link_click", text);
     }
   };
 
@@ -361,6 +366,7 @@ export function initEngagementTracking() {
 // Événements prédéfinis pour le portfolio
 export const analytics = {
   pageView: (path) => trackEvent("page_view", null, path),
+  imageZoom: (imageName) => trackEvent("image_zoom", `Zoom : ${imageName}`),
   cvDownload: (label = "CV PDF") => trackEvent("cv_download", label),
   contactClick: (channel) => trackEvent("contact_click", channel),
   langChange: (fromLang, toLang) => trackEvent("lang_change", `${fromLang} -> ${toLang}`),
