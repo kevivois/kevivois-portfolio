@@ -1094,6 +1094,215 @@ ol, ul { padding: 0; list-style: none; }
   color: var(--accent);
 }
 
+/* Styles pour les nouveaux graphiques en direct */
+.admin-charts-section {
+  padding: 0 0 32px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+.admin-charts-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+}
+.admin-chart-box {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.chart-box-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.chart-box-title {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chart-box-meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.svg-chart-container {
+  position: relative;
+  width: 100%;
+  height: 160px;
+}
+.admin-activity-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.chart-data-point {
+  cursor: pointer;
+}
+.chart-circle {
+  transition: r 0.2s ease, fill 0.2s ease;
+}
+.chart-hover-tooltip {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: var(--ink);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  pointer-events: none;
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.chart-hover-tooltip strong {
+  font-family: var(--display);
+  font-size: 12px;
+}
+.chart-hover-tooltip span {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: #c2cec5;
+}
+.chart-x-labels {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* Barres de pulse temps réel (30 dernières minutes) */
+.pulse-bars-wrapper {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 160px;
+}
+.pulse-bars-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 125px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.pulse-bar-col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  cursor: pointer;
+}
+.pulse-bar-fill {
+  width: 100%;
+  background: var(--soft);
+  border-radius: 1px;
+  transition: height 0.3s ease, background-color 0.2s ease;
+}
+.pulse-bar-fill.is-active {
+  background: var(--accent);
+}
+.pulse-bars-labels {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  padding-top: 6px;
+}
+.live-mini-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  animation: pulse 1.8s infinite;
+}
+.pulse-now-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #10b981;
+  font-weight: 500;
+}
+
+/* Badges pros vs FAI */
+.pro-org-tag {
+  display: inline-block;
+  padding: 1px 5px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  background: #17231e;
+  color: #fff;
+  border-radius: 2px;
+  margin-right: 6px;
+}
+.isp-tag {
+  display: inline-block;
+  padding: 1px 5px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  border-radius: 2px;
+  margin-right: 6px;
+}
+.cell-org-badge.is-pro {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+  font-weight: 600;
+}
+.cell-org-badge.is-isp {
+  background: var(--soft);
+  color: var(--ink);
+}
+.cell-conn-info {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+  margin-top: 2px;
+}
+.cell-camp-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 4px;
+  background: #fef3c7;
+  color: #92400e;
+  font-family: var(--mono);
+  font-size: 9px;
+  border-radius: 2px;
+}
+.tag-campaign {
+  color: #92400e;
+  background: #fef3c7;
+  padding: 1px 5px;
+  border-radius: 2px;
+}
+
+@media (max-width: 900px) {
+  .admin-charts-grid { grid-template-columns: 1fr; }
+}
+
 .admin-back-bottom-btn {
   display: inline-flex;
   align-items: center;

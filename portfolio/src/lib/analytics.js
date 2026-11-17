@@ -141,6 +141,51 @@ async function getGeoLocation() {
   return cachedGeo;
 }
 
+// Classification : Vraie entreprise / institution vs FAI grand public (Wi-Fi résidentiel)
+const CONSUMER_ISP_PATTERNS = [
+  "swisscom", "sunrise", "salt mobile", "salt communication", "orange", "free sas", 
+  "iliad", "bouygues", "sfr", "telecom", "telekom", "vodafone", "comcast", "verizon", 
+  "charter", "spectrum", "at&t", "vtx", "init7", "quickline", "upc", "cablecom", 
+  "netplus", "postluxembourg", "proximus", "kpn", "ziggo", "virgin media", "bt ", 
+  "o2", "t-mobile", "telefonica", "fastweb", "wind tre", "tim ", "opérateur", "residential"
+];
+
+export function isLikelyCompany(org, isp) {
+  const target = (org || isp || "").toLowerCase();
+  if (!target || target === "unknown" || target.includes("opérateur")) return false;
+  const isConsumerIsp = CONSUMER_ISP_PATTERNS.some((pattern) => target.includes(pattern));
+  return !isConsumerIsp;
+}
+
+// Détection de la connectivité réseau (4G/5G, débit, latence)
+function getNetworkConnection() {
+  if (typeof navigator === "undefined" || !navigator.connection) return null;
+  const conn = navigator.connection;
+  const type = conn.effectiveType ? conn.effectiveType.toUpperCase() : null;
+  const speed = conn.downlink ? `${conn.downlink} Mbps` : null;
+  const rtt = conn.rtt ? `${conn.rtt}ms` : null;
+  if (type && speed && rtt) return `${type} (${speed}, ${rtt})`;
+  if (type && speed) return `${type} (${speed})`;
+  if (type) return type;
+  return null;
+}
+
+// Détection du paramètre de campagne (?ref=... ou ?utm_source=...)
+function getCampaignRef() {
+  if (typeof window === "undefined") return null;
+  const saved = sessionStorage.getItem("kv_analytics_ref");
+  if (saved) return saved;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref") || params.get("utm_source") || params.get("from") || params.get("source");
+    if (ref) {
+      sessionStorage.setItem("kv_analytics_ref", ref);
+      return ref;
+    }
+  } catch {}
+  return null;
+}
+
 // Récupération de la langue préférée de l'utilisateur
 function getUserLanguage() {
   if (typeof navigator === "undefined") return "fr";
@@ -211,6 +256,9 @@ export async function trackEvent(eventType, eventLabel = null, pagePath = null, 
       longitude: geo.longitude,
       isp: geo.isp,
       organization: geo.organization,
+      is_company: isLikelyCompany(geo.organization, geo.isp),
+      connection_type: getNetworkConnection(),
+      campaign_ref: getCampaignRef(),
       user_language: getUserLanguage(),
       duration_seconds: extra.duration_seconds || null,
       scroll_depth: extra.scroll_depth || null,

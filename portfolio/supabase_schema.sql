@@ -28,7 +28,10 @@ CREATE TABLE IF NOT EXISTS public.analytics_events (
     organization TEXT, -- ex: 'EPFL', 'Google LLC', 'Rolex', 'Banque Cantonale'
     user_language TEXT, -- ex: 'fr-CH', 'fr-FR', 'en-US'
     duration_seconds INTEGER, -- Durée passée sur la page en secondes
-    scroll_depth INTEGER      -- Profondeur maximale de lecture (ex: 25, 50, 75, 100)
+    scroll_depth INTEGER,     -- Profondeur maximale de lecture (ex: 25, 50, 75, 100)
+    connection_type TEXT,     -- ex: '4G (15 Mbps, 45ms)'
+    is_company BOOLEAN DEFAULT false, -- true si entreprise/école/institution, false si FAI résidentiel
+    campaign_ref TEXT         -- ex: 'candidature_google', 'linkedin_dm' (via ?ref= ou ?utm_source=)
 );
 
 -- Si la table existait déjà, ajout des colonnes géographiques et comportementales
@@ -44,6 +47,9 @@ ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS organization TEXT;
 ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS user_language TEXT;
 ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS duration_seconds INTEGER;
 ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS scroll_depth INTEGER;
+ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS connection_type TEXT;
+ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS is_company BOOLEAN DEFAULT false;
+ALTER TABLE public.analytics_events ADD COLUMN IF NOT EXISTS campaign_ref TEXT;
 
 -- 2. Création d'index pour optimiser les requêtes du dashboard admin
 CREATE INDEX IF NOT EXISTS idx_analytics_created_at ON public.analytics_events (created_at DESC);

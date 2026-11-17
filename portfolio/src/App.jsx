@@ -527,8 +527,8 @@ function App() {
 
   const [route, setRoute] = useState(() => {
     if (typeof window === "undefined") return "/";
-    const path = window.location.pathname.replace(/\/$/, "");
-    if (path === "/admin" || window.location.hash === "#admin") return "/admin";
+    const path = window.location.pathname.replace(/\/+$/, "");
+    if (path === "/admin" || path.startsWith("/admin") || window.location.hash.includes("admin")) return "/admin";
     return "/";
   });
 
@@ -563,8 +563,8 @@ function App() {
   // Suivi de l'URL et raccourcis
   useEffect(() => {
     const handleLocation = () => {
-      const path = window.location.pathname.replace(/\/$/, "");
-      if (path === "/admin" || window.location.hash === "#admin") {
+      const path = window.location.pathname.replace(/\/+$/, "");
+      if (path === "/admin" || path.startsWith("/admin") || window.location.hash.includes("admin")) {
         setRoute("/admin");
       } else {
         setRoute("/");

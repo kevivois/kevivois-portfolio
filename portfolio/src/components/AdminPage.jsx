@@ -21,9 +21,15 @@ import {
   IconClock,
   IconActivity,
   IconLanguage,
+  IconWifi,
+  IconHome,
+  IconBriefcase,
+  IconTarget,
 } from "@tabler/icons-react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { isLikelyCompany } from "../lib/analytics";
 import { InteractiveMap } from "./InteractiveMap";
+import { LiveActivityChart } from "./LiveActivityChart";
 
 function getCountryFlag(code) {
   if (!code || code.length !== 2) return "🌐";
@@ -225,17 +231,49 @@ export function AdminPage({ onBack }) {
       .sort((a, b) => b.count - a.count)
       .slice(0, 7);
 
-    // Organisations, Entreprises & FAI
-    const orgsCount = {};
+    // Différenciation : Vraies Entreprises vs Wi-Fi Particulier (FAI)
+    const companiesCount = {};
+    const ispsCount = {};
+
     events.forEach((e) => {
       const org = e.organization || e.isp;
-      if (org && org !== "unknown" && org !== "Opérateur suisse") {
-        orgsCount[org] = (orgsCount[org] || 0) + 1;
+      if (!org || org === "unknown" || org === "Opérateur suisse") return;
+      const isComp = typeof e.is_company === "boolean" ? e.is_company : isLikelyCompany(e.organization, e.isp);
+      if (isComp) {
+        companiesCount[org] = (companiesCount[org] || 0) + 1;
+      } else {
+        ispsCount[org] = (ispsCount[org] || 0) + 1;
       }
     });
-    const topOrgs = Object.entries(orgsCount)
+
+    const topCompanies = Object.entries(companiesCount)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6);
+
+    const topIsps = Object.entries(ispsCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6);
+
+    // Connectivité réseau (4G/5G, Wi-Fi/Fibre, débits)
+    const connCount = {};
+    events.forEach((e) => {
+      const conn = e.connection_type || "Wi-Fi / Haut débit";
+      connCount[conn] = (connCount[conn] || 0) + 1;
+    });
+    const topConnections = Object.entries(connCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+
+    // Liens de tracking personnalisés / Campagnes (?ref=...)
+    const campCount = {};
+    events.forEach((e) => {
+      if (e.campaign_ref) {
+        campCount[e.campaign_ref] = (campCount[e.campaign_ref] || 0) + 1;
+      }
+    });
+    const topCampaigns = Object.entries(campCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
 
     // Cantons & Régions
     const regionsCount = {};
@@ -287,7 +325,10 @@ export function AdminPage({ onBack }) {
       activeNow,
       topReferrers,
       topCountries,
-      topOrgs,
+      topCompanies,
+      topIsps,
+      topConnections,
+      topCampaigns,
       topRegions,
       topLangs,
       deviceCount,
@@ -541,6 +582,9 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                 </div>
               </div>
 
+              {/* SECTION GRAPHIQUES EN DIRECT */}
+              <LiveActivityChart events={events} timeRange={timeRange} />
+
               {/* SECTION GÉOGRAPHIE & CARTE */}
               <div className="admin-panel-card admin-geo-section">
                 <div className="section-heading">
@@ -677,28 +721,97 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                 </div>
               </div>
 
-              {/* Deux colonnes supplémentaires : Organisations / Entreprises & Cantons / Langues */}
+              {/* Deux colonnes : Vraies Entreprises vs Wi-Fi Particulier (FAI) */}
               <div className="two-col admin-breakdown-row">
-                {/* Organisations & Entreprises détectées */}
+                {/* 1. VRAIES ENTREPRISES & ÉCOLES */}
                 <div className="admin-panel-card">
                   <div className="section-heading">
-                    <h3 className="admin-panel-title">Organisations &amp; Entreprises</h3>
-                    <span className="section-aside">Réseau FAI / Entreprise</span>
+                    <h3 className="admin-panel-title">🏢 Entreprises &amp; Écoles</h3>
+                    <span className="section-aside">Réseaux pros vérifiés</span>
                   </div>
-                  {stats.topOrgs.length === 0 ? (
+                  {stats.topCompanies.length === 0 ? (
                     <p className="admin-empty-note">
-                      Aucune organisation ou FAI spécifique détecté sur cette période.
+                      Aucune visite depuis une entreprise détectée sur cette période (hors FAI résidentiels).
                     </p>
                   ) : (
                     <ul className="admin-sources-list">
-                      {stats.topOrgs.map(([org, count]) => {
+                      {stats.topCompanies.map(([org, count]) => {
                         const total = events.length || 1;
                         const pct = Math.round((count / total) * 100);
                         return (
                           <li key={org} className="admin-source-item">
                             <div className="admin-source-info">
                               <span className="admin-source-name">
-                                <IconBuilding size={14} stroke={1.7} className="inline-icon-sub" /> {org}
+                                <span className="pro-org-tag">🏢 PRO</span> {org}
+                              </span>
+                              <span className="admin-source-count">
+                                {count} visite{count > 1 ? "s" : ""} · {pct}%
+                              </span>
+                            </div>
+                            <div className="admin-source-track">
+                              <div className="admin-source-bar" style={{ width: `${pct}%`, background: "#245b46" }} />
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                {/* 2. WI-FI PARTICULIER & OPÉRATEURS RÉSIDENTIELS */}
+                <div className="admin-panel-card">
+                  <div className="section-heading">
+                    <h3 className="admin-panel-title">🏠 Wi-Fi Privé &amp; Opérateurs</h3>
+                    <span className="section-aside">Fournisseurs d’accès</span>
+                  </div>
+                  {stats.topIsps.length === 0 ? (
+                    <p className="admin-empty-note">Aucun opérateur enregistré.</p>
+                  ) : (
+                    <ul className="admin-sources-list">
+                      {stats.topIsps.map(([isp, count]) => {
+                        const total = events.length || 1;
+                        const pct = Math.round((count / total) * 100);
+                        return (
+                          <li key={isp} className="admin-source-item">
+                            <div className="admin-source-info">
+                              <span className="admin-source-name">
+                                <span className="isp-tag">🏠 FAI</span> {isp}
+                              </span>
+                              <span className="admin-source-count">
+                                {count} visite{count > 1 ? "s" : ""} · {pct}%
+                              </span>
+                            </div>
+                            <div className="admin-source-track">
+                              <div className="admin-source-bar" style={{ width: `${pct}%` }} />
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              {/* Deux colonnes : Connectivité Réseau & Campagnes ciblées (?ref=...) */}
+              <div className="two-col admin-breakdown-row">
+                {/* 3. CONNECTIVITÉ RÉSEAU */}
+                <div className="admin-panel-card">
+                  <div className="section-heading">
+                    <h3 className="admin-panel-title">📶 Connectivité Réseau</h3>
+                    <span className="section-aside">Vitesse &amp; Type d'accès</span>
+                  </div>
+                  {stats.topConnections.length === 0 ? (
+                    <p className="admin-empty-note">Aucune donnée de connectivité disponible.</p>
+                  ) : (
+                    <ul className="admin-sources-list">
+                      {stats.topConnections.map(([conn, count]) => {
+                        const total = events.length || 1;
+                        const pct = Math.round((count / total) * 100);
+                        return (
+                          <li key={conn} className="admin-source-item">
+                            <div className="admin-source-info">
+                              <span className="admin-source-name">
+                                <IconWifi size={14} stroke={1.7} className="inline-icon-sub" /> {conn}
                               </span>
                               <span className="admin-source-count">
                                 {count} vue{count > 1 ? "s" : ""} · {pct}%
@@ -714,15 +827,33 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                   )}
                 </div>
 
-                {/* Cantons, Régions & Langues */}
+                {/* 4. LIENS CIBLÉS & CANTONS */}
                 <div className="admin-panel-card">
                   <div className="section-heading">
-                    <h3 className="admin-panel-title">Cantons &amp; Langues</h3>
-                    <span className="section-aside">Régions et préférences</span>
+                    <h3 className="admin-panel-title">🎯 Campagnes &amp; Cantons</h3>
+                    <span className="section-aside">Sources ciblées</span>
                   </div>
 
                   <div className="admin-subcard-split">
                     <div>
+                      <p className="admin-mini-title">Liens ciblés (?ref=... / Candidatures)</p>
+                      {stats.topCampaigns.length === 0 ? (
+                        <p className="admin-empty-note" style={{ fontSize: "11px" }}>
+                          Astuce : ajoutez <code>?ref=nom_entreprise</code> à votre URL pour suivre une candidature précise !
+                        </p>
+                      ) : (
+                        <ul className="admin-mini-list">
+                          {stats.topCampaigns.map(([camp, count]) => (
+                            <li key={camp} className="admin-mini-row">
+                              <span className="cell-mono tag-campaign">{camp}</span>
+                              <strong>{count} vue{count > 1 ? "s" : ""}</strong>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    <div style={{ marginTop: "1rem" }}>
                       <p className="admin-mini-title">Cantons / Régions</p>
                       {stats.topRegions.length === 0 ? (
                         <p className="admin-empty-note">Aucune région enregistrée.</p>
@@ -731,22 +862,6 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                           {stats.topRegions.slice(0, 4).map(([reg, count]) => (
                             <li key={reg} className="admin-mini-row">
                               <span>{reg}</span>
-                              <strong>{count}</strong>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-
-                    <div style={{ marginTop: "1rem" }}>
-                      <p className="admin-mini-title">Langues du système</p>
-                      {stats.topLangs.length === 0 ? (
-                        <p className="admin-empty-note">Aucune langue détectée.</p>
-                      ) : (
-                        <ul className="admin-mini-list">
-                          {stats.topLangs.map(([langCode, count]) => (
-                            <li key={langCode} className="admin-mini-row">
-                              <span className="cell-mono">{langCode}</span>
                               <strong>{count}</strong>
                             </li>
                           ))}
@@ -775,64 +890,86 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                           <th>Localisation &amp; Réseau</th>
                           <th>Page / Cible</th>
                           <th>Détail / Engagement</th>
-                          <th>Appareil</th>
+                          <th>Appareil &amp; Connectivité</th>
                           <th>Langue</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {stats.recentEvents.map((evt) => (
-                          <tr
-                            key={evt.id}
-                            className={evt.id === newLiveEventId ? "row-live-highlight" : ""}
-                          >
-                            <td className="cell-mono cell-time">
-                              {new Date(evt.created_at).toLocaleTimeString("fr-CH", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                second: "2-digit",
-                                day: "2-digit",
-                                month: "2-digit",
-                              })}
-                            </td>
-                            <td>
-                              <span className={`admin-badge-type badge-${evt.event_type}`}>
-                                {evt.event_type}
-                              </span>
-                            </td>
-                            <td className="cell-location">
-                              <div>
-                                {evt.country_code ? (
-                                  <span>
-                                    {getCountryFlag(evt.country_code)} {evt.city ? `${evt.city}` : ""}{evt.region ? ` (${evt.region})` : ""}, {evt.country_code}
+                        {stats.recentEvents.map((evt) => {
+                          const isComp = typeof evt.is_company === "boolean"
+                            ? evt.is_company
+                            : isLikelyCompany(evt.organization, evt.isp);
+                          const orgLabel = evt.organization || evt.isp;
+
+                          return (
+                            <tr
+                              key={evt.id}
+                              className={evt.id === newLiveEventId ? "row-live-highlight" : ""}
+                            >
+                              <td className="cell-mono cell-time">
+                                {new Date(evt.created_at).toLocaleTimeString("fr-CH", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                })}
+                              </td>
+                              <td>
+                                <span className={`admin-badge-type badge-${evt.event_type}`}>
+                                  {evt.event_type}
+                                </span>
+                              </td>
+                              <td className="cell-location">
+                                <div>
+                                  {evt.country_code ? (
+                                    <span>
+                                      {getCountryFlag(evt.country_code)} {evt.city ? `${evt.city}` : ""}{evt.region ? ` (${evt.region})` : ""}, {evt.country_code}
+                                    </span>
+                                  ) : (
+                                    <span className="cell-muted">-</span>
+                                  )}
+                                </div>
+                                {orgLabel && (
+                                  <span
+                                    className={`cell-org-badge ${isComp ? "is-pro" : "is-isp"}`}
+                                    title={isComp ? "Réseau d'entreprise / institution vérifié" : "Fournisseur d'accès résidentiel (Wi-Fi privé)"}
+                                  >
+                                    {isComp ? "🏢 " : "🏠 "}{orgLabel}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="cell-mono cell-path">
+                                {evt.page_path || "/"}
+                                {evt.campaign_ref && (
+                                  <span className="cell-camp-tag" title="Paramètre de campagne">
+                                    ?ref={evt.campaign_ref}
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                {evt.duration_seconds ? (
+                                  <span className="cell-duration-tag">
+                                    ⏱ {evt.duration_seconds}s{evt.scroll_depth ? ` · scroll ${evt.scroll_depth}%` : ""}
+                                  </span>
+                                ) : evt.scroll_depth ? (
+                                  <span className="cell-duration-tag">
+                                    Scroll {evt.scroll_depth}%
                                   </span>
                                 ) : (
-                                  <span className="cell-muted">-</span>
+                                  evt.event_label || "-"
                                 )}
-                              </div>
-                              {(evt.organization || evt.isp) && (
-                                <span className="cell-org-badge" title={evt.organization || evt.isp}>
-                                  {evt.organization || evt.isp}
-                                </span>
-                              )}
-                            </td>
-                            <td className="cell-mono cell-path">{evt.page_path || "/"}</td>
-                            <td>
-                              {evt.duration_seconds ? (
-                                <span className="cell-duration-tag">
-                                  ⏱ {evt.duration_seconds}s{evt.scroll_depth ? ` · scroll ${evt.scroll_depth}%` : ""}
-                                </span>
-                              ) : evt.scroll_depth ? (
-                                <span className="cell-duration-tag">
-                                  Scroll {evt.scroll_depth}%
-                                </span>
-                              ) : (
-                                evt.event_label || "-"
-                              )}
-                            </td>
-                            <td className="cell-muted">{evt.device_type} · {evt.browser}</td>
-                            <td className="cell-mono cell-muted">{evt.user_language || "-"}</td>
-                          </tr>
-                        ))}
+                              </td>
+                              <td className="cell-muted">
+                                <div>{evt.device_type} · {evt.browser}</div>
+                                {evt.connection_type && (
+                                  <div className="cell-conn-info">📶 {evt.connection_type}</div>
+                                )}
+                              </td>
+                              <td className="cell-mono cell-muted">{evt.user_language || "-"}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
