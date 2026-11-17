@@ -15,12 +15,20 @@ import {
   IconCopy,
 } from "@tabler/icons-react";
 import { LANGUAGES, translations } from "./translations";
-import { analytics, initEngagementTracking } from "./lib/analytics";
+import { analytics, initEngagementTracking, isDevEnvironment } from "./lib/analytics";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { Analytics } from "@vercel/analytics/react";
 
 const AdminPage = lazy(() =>
   import("./components/AdminPage").then((mod) => ({ default: mod.AdminPage }))
+);
+
+const SharedView = lazy(() =>
+  import("./components/SharedView").then((mod) => ({ default: mod.SharedView }))
+);
+
+const StandaloneViewer = lazy(() =>
+  import("./components/StandaloneViewer").then((mod) => ({ default: mod.StandaloneViewer }))
 );
 
 const EMAIL = "contact@kevivois.ch";
@@ -535,12 +543,50 @@ function App() {
     return "fr";
   });
 
-  const [route, setRoute] = useState(() => {
-    if (typeof window === "undefined") return "/";
+  // Résolution de la route actuelle (Accueil, Admin, Partage public)
+  const resolveCurrentRoute = () => {
+    if (typeof window === "undefined") return { path: "/", type: "home" };
     const path = window.location.pathname.replace(/\/+$/, "");
-    if (path === "/admin" || path.startsWith("/admin") || window.location.hash.includes("admin")) return "/admin";
-    return "/";
-  });
+    const hash = window.location.hash || "";
+
+    if (path === "/admin" || path.startsWith("/admin") || hash.includes("admin")) {
+      return { path: "/admin", type: "admin" };
+    }
+
+    if (
+      path === "/preview" ||
+      path.startsWith("/preview") ||
+      path === "/view" ||
+      path.startsWith("/view") ||
+      hash.includes("preview") ||
+      hash.includes("view")
+    ) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get("token") || urlParams.get("t") || "";
+      const filePath = urlParams.get("path") || urlParams.get("p") || urlParams.get("file") || "";
+      const fileName = urlParams.get("name") || urlParams.get("n") || filePath.split("/").pop() || "Document";
+      return { path: window.location.pathname, type: "preview", token, filePath, fileName };
+    }
+
+    if (path.startsWith("/share") || hash.includes("share")) {
+      let token = "";
+      if (path.startsWith("/share/")) {
+        token = path.replace("/share/", "").split("/")[0];
+      } else {
+        const urlParams = new URLSearchParams(window.location.search);
+        token = urlParams.get("token") || urlParams.get("t") || "";
+        if (!token && hash.includes("share/")) {
+          token = hash.split("share/")[1]?.split("/")[0] || "";
+        }
+      }
+      return { path: window.location.pathname, type: "share", token };
+    }
+
+    return { path: "/", type: "home" };
+  };
+
+  const [routeInfo, setRouteInfo] = useState(resolveCurrentRoute);
+  const route = routeInfo.path;
 
   // Détection de la session administrateur pour navigation fluide sans reconnexion
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -566,19 +612,14 @@ function App() {
   // Navigation interne sans rechargement
   const navigateTo = (path) => {
     window.history.pushState(null, "", path);
-    setRoute(path);
+    setRouteInfo(resolveCurrentRoute());
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   // Suivi de l'URL et raccourcis
   useEffect(() => {
     const handleLocation = () => {
-      const path = window.location.pathname.replace(/\/+$/, "");
-      if (path === "/admin" || path.startsWith("/admin") || window.location.hash.includes("admin")) {
-        setRoute("/admin");
-      } else {
-        setRoute("/");
-      }
+      setRouteInfo(resolveCurrentRoute());
     };
 
     window.addEventListener("popstate", handleLocation);
@@ -601,19 +642,22 @@ function App() {
   }, []);
 
   // Envoi de la télémétrie et suivi de l'engagement (durée, scroll, clics sortants)
-  // Strictement désactivé sur l'espace d'administration et la page de connexion
+  // Strictement désactivé en développement local, sur l'espace admin et les partages
   useEffect(() => {
-    const isAdminRoute =
-      route === "/admin" ||
+    const isExcludedRoute =
+      isDevEnvironment() ||
+      routeInfo.type === "admin" ||
+      routeInfo.type === "share" ||
+      routeInfo.type === "preview" ||
       window.location.pathname.includes("admin") ||
       window.location.hash.includes("admin");
 
-    if (!isAdminRoute) {
+    if (!isExcludedRoute) {
       analytics.pageView(window.location.pathname || "/");
       const cleanup = initEngagementTracking();
       return cleanup;
     }
-  }, [route]);
+  }, [routeInfo]);
 
   useEffect(() => {
     localStorage.setItem("portfolio_lang", lang);
@@ -647,8 +691,67 @@ function App() {
     { id: "contact", label: t.nav.contact },
   ];
 
+  // Vue Visualiseur Plein Écran (/preview ou /view)
+  if (routeInfo.type === "preview") {
+    return (
+      <Suspense
+        fallback={
+          <div
+            className="site-shell"
+            style={{
+              padding: 60,
+              textAlign: "center",
+              color: "var(--muted)",
+              fontFamily: "var(--mono)",
+              fontSize: 13,
+            }}
+          >
+            Chargement de l’aperçu plein écran...
+          </div>
+        }
+      >
+        <StandaloneViewer
+          token={routeInfo.token}
+          filePath={routeInfo.filePath}
+          fileName={routeInfo.fileName}
+          onBack={() => {
+            if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              navigateTo(routeInfo.token ? `/share/${routeInfo.token}` : "/admin");
+            }
+          }}
+        />
+      </Suspense>
+    );
+  }
+
+  // Vue Partage Public (/share/:token)
+  if (routeInfo.type === "share") {
+    return (
+      <Suspense
+        fallback={
+          <div
+            className="site-shell"
+            style={{
+              padding: 60,
+              textAlign: "center",
+              color: "var(--muted)",
+              fontFamily: "var(--mono)",
+              fontSize: 13,
+            }}
+          >
+            Chargement du document partagé...
+          </div>
+        }
+      >
+        <SharedView token={routeInfo.token} onBack={() => navigateTo("/")} />
+      </Suspense>
+    );
+  }
+
   // Si l'utilisateur est sur /admin, on affiche la vue Admin avec la DA du site
-  if (route === "/admin") {
+  if (routeInfo.type === "admin" || route === "/admin") {
     return (
       <Suspense
         fallback={

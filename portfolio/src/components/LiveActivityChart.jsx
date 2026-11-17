@@ -2,13 +2,28 @@ import { useMemo, useState, useRef } from "react";
 import { IconActivity, IconTrendingUp, IconFilter, IconEye, IconCursorText, IconClick } from "@tabler/icons-react";
 
 export function LiveActivityChart({ events, timeRange }) {
-  const [metricFilter, setMetricFilter] = useState("all"); // "all", "page_view", "interaction"
+  const [metricFilter, setMetricFilter] = useState("visitors"); // "visitors", "page_view", "interaction", "all"
   const [hoveredPoint, setHoveredPoint] = useState(null);
   const [hoveredMinute, setHoveredMinute] = useState(null);
   const svgRef = useRef(null);
 
-  // Filtrage selon le type d'événement choisi
-  const filteredEvents = useMemo(() => {
+  // Totaux globaux par catégorie
+  const { totalVisitors, totalViews, totalClicks, totalAll } = useMemo(() => {
+    const visitors = new Set(events.map((e) => e.session_id).filter(Boolean)).size;
+    const views = events.filter((e) => e.event_type === "page_view").length;
+    const clicks = events.filter((e) =>
+      ["outbound_click", "contact_click", "link_click", "nav_click", "image_zoom", "cv_download"].includes(e.event_type)
+    ).length;
+    return {
+      totalVisitors: visitors,
+      totalViews: views,
+      totalClicks: clicks,
+      totalAll: events.length,
+    };
+  }, [events]);
+
+  // Filtrage des événements pour le flux 30 min en direct
+  const filteredEventsForPulse = useMemo(() => {
     if (metricFilter === "page_view") {
       return events.filter((e) => e.event_type === "page_view");
     }
@@ -31,7 +46,7 @@ export function LiveActivityChart({ events, timeRange }) {
       };
     });
 
-    filteredEvents.forEach((evt) => {
+    filteredEventsForPulse.forEach((evt) => {
       const evtTime = new Date(evt.created_at).getTime();
       const diffMs = now - evtTime;
       const diffMins = Math.floor(diffMs / (60 * 1000));
@@ -44,11 +59,11 @@ export function LiveActivityChart({ events, timeRange }) {
     });
 
     return minuteSlots;
-  }, [filteredEvents]);
+  }, [filteredEventsForPulse]);
 
   // 2. Calcul des créneaux temporels selon la période sélectionnée
   const timelineData = useMemo(() => {
-    if (!filteredEvents.length) return [];
+    if (!events.length) return [];
 
     const now = new Date();
     let slots = [];
@@ -64,7 +79,8 @@ export function LiveActivityChart({ events, timeRange }) {
           fullLabel: `Aujourd'hui à ${hour}:00 - ${hour}:59`,
           timeStart: new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour).getTime(),
           timeEnd: new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour + 1).getTime(),
-          count: 0,
+          sessionsSet: new Set(),
+          eventsCount: 0,
           views: 0,
           clicks: 0,
         };
@@ -80,7 +96,8 @@ export function LiveActivityChart({ events, timeRange }) {
           fullLabel: dayStr,
           timeStart: new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(),
           timeEnd: new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime(),
-          count: 0,
+          sessionsSet: new Set(),
+          eventsCount: 0,
           views: 0,
           clicks: 0,
         };
@@ -96,34 +113,81 @@ export function LiveActivityChart({ events, timeRange }) {
           fullLabel: d.toLocaleDateString("fr-CH", { weekday: "short", day: "numeric", month: "long" }),
           timeStart: new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(),
           timeEnd: new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime(),
-          count: 0,
+          sessionsSet: new Set(),
+          eventsCount: 0,
           views: 0,
           clicks: 0,
         };
       });
     }
 
-    filteredEvents.forEach((evt) => {
+    // Agréger tous les événements dans leurs créneaux
+    events.forEach((evt) => {
       const evtTime = new Date(evt.created_at).getTime();
       const slot = slots.find((s) => evtTime >= s.timeStart && evtTime < s.timeEnd);
       if (slot) {
-        slot.count++;
+        slot.eventsCount++;
+        if (evt.session_id) slot.sessionsSet.add(evt.session_id);
         if (evt.event_type === "page_view") slot.views++;
-        else slot.clicks++;
+        else if (
+          ["outbound_click", "contact_click", "link_click", "nav_click", "image_zoom", "cv_download"].includes(
+            evt.event_type
+          )
+        ) {
+          slot.clicks++;
+        }
       }
     });
 
-    return slots;
-  }, [filteredEvents, timeRange]);
+    // Assigner la valeur `count` selon le filtre sélectionné par l'utilisateur
+    return slots.map((s) => {
+      let activeCount = s.eventsCount;
+      if (metricFilter === "visitors") {
+        activeCount = s.sessionsSet.size;
+      } else if (metricFilter === "page_view") {
+        activeCount = s.views;
+      } else if (metricFilter === "interaction") {
+        activeCount = s.clicks;
+      }
+
+      return {
+        ...s,
+        count: activeCount,
+        visitorsCount: s.sessionsSet.size,
+      };
+    });
+  }, [events, timeRange, metricFilter]);
+
+  // Valeur totale active pour le compteur principal
+  const activeMetricTotal = useMemo(() => {
+    if (metricFilter === "visitors") return totalVisitors;
+    if (metricFilter === "page_view") return totalViews;
+    if (metricFilter === "interaction") return totalClicks;
+    return totalAll;
+  }, [metricFilter, totalVisitors, totalViews, totalClicks, totalAll]);
+
+  // Libellés selon la métrique sélectionnée
+  const getMetricLabel = (count, singularOnly = false) => {
+    const plural = count > 1;
+    if (metricFilter === "visitors") {
+      return singularOnly ? "visiteur unique" : plural ? "visiteurs uniques" : "visiteur unique";
+    }
+    if (metricFilter === "page_view") {
+      return singularOnly ? "page vue" : plural ? "pages vues" : "page vue";
+    }
+    if (metricFilter === "interaction") {
+      return singularOnly ? "action & clic" : plural ? "actions & clics" : "action & clic";
+    }
+    return singularOnly ? "événement" : plural ? "événements" : "événement";
+  };
 
   // Génération des coordonnées du tracé SVG
-  const { pathD, areaD, points, maxVal, totalVisits } = useMemo(() => {
+  const { pathD, areaD, points, maxVal } = useMemo(() => {
     if (!timelineData.length) {
-      return { pathD: "", areaD: "", points: [], maxVal: 1, totalVisits: 0 };
+      return { pathD: "", areaD: "", points: [], maxVal: 1 };
     }
 
     const counts = timelineData.map((d) => d.count);
-    const sum = counts.reduce((a, b) => a + b, 0);
     const max = Math.max(...counts, 3);
     const width = 640;
     const height = 180;
@@ -142,13 +206,15 @@ export function LiveActivityChart({ events, timeRange }) {
         shortLabel: d.shortLabel,
         fullLabel: d.fullLabel,
         count: d.count,
+        visitorsCount: d.visitorsCount,
         views: d.views,
         clicks: d.clicks,
+        eventsCount: d.eventsCount,
       };
     });
 
     if (pts.length < 2) {
-      return { pathD: "", areaD: "", points: pts, maxVal: max, totalVisits: sum };
+      return { pathD: "", areaD: "", points: pts, maxVal: max };
     }
 
     // Calcul de courbe spline bezier naturelle
@@ -172,7 +238,7 @@ export function LiveActivityChart({ events, timeRange }) {
     const baseY = paddingY + innerH;
     const areaStr = `${dStr} L ${lastPt.x} ${baseY} L ${firstPt.x} ${baseY} Z`;
 
-    return { pathD: dStr, areaD: areaStr, points: pts, maxVal: max, totalVisits: sum };
+    return { pathD: dStr, areaD: areaStr, points: pts, maxVal: max };
   }, [timelineData]);
 
   // Détection fluide au survol ou au toucher sur le graphique (desktop & mobile/tablette)
@@ -236,28 +302,39 @@ export function LiveActivityChart({ events, timeRange }) {
           <span className="section-aside">Survolez la courbe pour inspecter chaque instant</span>
         </div>
 
-        {/* Sélecteur de métrique */}
+        {/* Sélecteur de métrique avec vrais décomptes distincts */}
         <div className="chart-metric-switcher" role="group" aria-label="Filtrer les métriques">
           <button
             type="button"
-            className={`metric-pill-btn${metricFilter === "all" ? " is-active" : ""}`}
-            onClick={() => setMetricFilter("all")}
+            className={`metric-pill-btn${metricFilter === "visitors" ? " is-active" : ""}`}
+            onClick={() => setMetricFilter("visitors")}
+            title="Personnes uniques distinctes (sessions)"
           >
-            Tous ({events.length})
+            👤 Visiteurs ({totalVisitors})
           </button>
           <button
             type="button"
             className={`metric-pill-btn${metricFilter === "page_view" ? " is-active" : ""}`}
             onClick={() => setMetricFilter("page_view")}
+            title="Nombre de fois où la page a été chargée"
           >
-            Pages vues
+            👁️ Vues ({totalViews})
           </button>
           <button
             type="button"
             className={`metric-pill-btn${metricFilter === "interaction" ? " is-active" : ""}`}
             onClick={() => setMetricFilter("interaction")}
+            title="Interactions : clics sur liens, contact, zooms, téléchargement CV"
           >
-            Clics &amp; Actions
+            ⚡ Clics &amp; Actions ({totalClicks})
+          </button>
+          <button
+            type="button"
+            className={`metric-pill-btn${metricFilter === "all" ? " is-active" : ""}`}
+            onClick={() => setMetricFilter("all")}
+            title="Cumul brut de tous les événements (vues + actions + scroll + sessions)"
+          >
+            📊 Tous ({totalAll})
           </button>
         </div>
       </div>
@@ -271,16 +348,36 @@ export function LiveActivityChart({ events, timeRange }) {
                 <>
                   <span className="chart-number-focus">{hoveredPoint.count}</span>
                   <div className="chart-meta-focus">
-                    <strong>{hoveredPoint.count > 1 ? "événements enregistrés" : "événement enregistré"}</strong>
-                    <span>{hoveredPoint.fullLabel}</span>
+                    <strong>
+                      {hoveredPoint.count} {getMetricLabel(hoveredPoint.count)}
+                    </strong>
+                    <span>
+                      {hoveredPoint.fullLabel} · {hoveredPoint.visitorsCount} visiteur{hoveredPoint.visitorsCount > 1 ? "s" : ""}, {hoveredPoint.views} vue{hoveredPoint.views > 1 ? "s" : ""}, {hoveredPoint.clicks} action{hoveredPoint.clicks > 1 ? "s" : ""}
+                    </span>
                   </div>
                 </>
               ) : (
                 <>
-                  <span className="chart-number-focus">{totalVisits}</span>
+                  <span className="chart-number-focus">{activeMetricTotal}</span>
                   <div className="chart-meta-focus">
-                    <strong>Total ({timeRangeLabels[timeRange] || timeRange})</strong>
-                    <span>Glissez la souris sur la courbe pour explorer</span>
+                    <strong>
+                      {metricFilter === "visitors"
+                        ? `Visiteurs uniques (${timeRangeLabels[timeRange] || timeRange})`
+                        : metricFilter === "page_view"
+                        ? `Pages vues (${timeRangeLabels[timeRange] || timeRange})`
+                        : metricFilter === "interaction"
+                        ? `Clics & Actions (${timeRangeLabels[timeRange] || timeRange})`
+                        : `Tous les événements (${timeRangeLabels[timeRange] || timeRange})`}
+                    </strong>
+                    <span>
+                      {metricFilter === "visitors"
+                        ? "Nombre de personnes distinctes ayant accédé au portfolio"
+                        : metricFilter === "page_view"
+                        ? "Nombre de pages affichées ou rafraîchies"
+                        : metricFilter === "interaction"
+                        ? "Téléchargements CV, zooms d'images, liens contact et réseaux"
+                        : "Cumul de tous les logs (pages + actions + lecture + sessions)"}
+                    </span>
                   </div>
                 </>
               )}
@@ -288,7 +385,7 @@ export function LiveActivityChart({ events, timeRange }) {
 
             <div className="chart-legend-tag">
               <span className="legend-indicator-line" />
-              <span>Pic : {maxVal}</span>
+              <span>Pic : {maxVal} {getMetricLabel(maxVal, true)}</span>
             </div>
           </div>
 
@@ -383,7 +480,7 @@ export function LiveActivityChart({ events, timeRange }) {
                   top: `${Math.max(10, hoveredPoint.y - 14)}px`,
                 }}
               >
-                <strong>{hoveredPoint.count} visite{hoveredPoint.count > 1 ? "s" : ""}</strong>
+                <strong>{hoveredPoint.count} {getMetricLabel(hoveredPoint.count)}</strong>
                 <span>{hoveredPoint.shortLabel}</span>
               </div>
             )}

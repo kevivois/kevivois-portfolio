@@ -209,6 +209,21 @@ export async function isAdminAuthenticated() {
   }
 }
 
+// Détection de l'environnement de développement local (localhost, 127.0.0.1, Vite dev)
+export function isDevEnvironment() {
+  if (typeof window === "undefined") return false;
+  if (import.meta.env.DEV) return true;
+  const host = window.location.hostname;
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "[::1]" ||
+    host.endsWith(".local") ||
+    window.location.port === "5173" ||
+    window.location.port === "3000"
+  );
+}
+
 // Vérifie si un chemin ou un libellé correspond à l'espace admin ou au login
 function isAdminRelated(path, label) {
   const p = (path || "").toLowerCase();
@@ -225,6 +240,11 @@ export async function trackEvent(eventType, eventLabel = null, pagePath = null, 
   }
 
   try {
+    // 0. Ne JAMAIS tracker en environnement de développement local (évite de polluer les vraies stats)
+    if (isDevEnvironment()) {
+      return;
+    }
+
     // 1. Ne JAMAIS tracker quoi que ce soit sur l'admin ou le login
     if (typeof window !== "undefined") {
       const curPath = (window.location.pathname || "").toLowerCase();
@@ -284,6 +304,11 @@ export async function trackEvent(eventType, eventLabel = null, pagePath = null, 
 // Initialisateur automatique du suivi de l'engagement (durée, scroll, clics externes)
 export function initEngagementTracking() {
   if (typeof window === "undefined") return () => {};
+
+  // Ne jamais activer le suivi en développement local (localhost / Vite dev)
+  if (isDevEnvironment()) {
+    return () => {};
+  }
 
   // Ne jamais activer le suivi d'engagement si l'utilisateur est sur l'admin ou le login
   const curPath = (window.location.pathname || "").toLowerCase();

@@ -30,11 +30,13 @@ import {
   IconX,
   IconInfoCircle,
   IconExternalLink,
+  IconFolder,
 } from "@tabler/icons-react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isLikelyCompany } from "../lib/analytics";
 import { InteractiveMap } from "./InteractiveMap";
 import { LiveActivityChart } from "./LiveActivityChart";
+import { AdminDrive } from "./AdminDrive";
 
 function getCountryFlag(code) {
   if (!code || code.length !== 2) return "🌐";
@@ -78,6 +80,7 @@ export function AdminPage({ onBack }) {
   const [password, setPassword] = useState("");
 
   // Période sélectionnée : "24h", "7d", "30d", "all"
+  const [adminTab, setAdminTab] = useState("analytics"); // "analytics" | "drive"
   const [timeRange, setTimeRange] = useState("7d");
   const [events, setEvents] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
@@ -448,14 +451,42 @@ export function AdminPage({ onBack }) {
           <div className="cover-inner admin-cover-inner">
             <div className="cover-copy">
               <p className="cover-kicker">
-                {session ? "00 / 01 · Tableau de bord" : "00 / 01 · Authentification"}
+                {session
+                  ? adminTab === "drive"
+                    ? "00 / 02 · Espace Cloud"
+                    : "00 / 01 · Tableau de bord"
+                  : "00 / 01 · Authentification"}
               </p>
               <h1 id="cover-title">
-                <span className="hero-line">{session ? "Statistiques." : "Connexion."}</span>
+                <span className="hero-line">
+                  {session ? (adminTab === "drive" ? "Mon Drive." : "Statistiques.") : "Connexion."}
+                </span>
               </h1>
             </div>
           </div>
         </section>
+
+        {/* Sélecteur d'onglets principal : Statistiques vs Mon Drive */}
+        {session && (
+          <div className="admin-tabs-nav-bar">
+            <div className="admin-tabs-nav-inner">
+              <button
+                type="button"
+                className={`admin-main-tab-btn${adminTab === "analytics" ? " is-active" : ""}`}
+                onClick={() => setAdminTab("analytics")}
+              >
+                <IconActivity size={15} stroke={1.8} /> Statistiques &amp; Audience
+              </button>
+              <button
+                type="button"
+                className={`admin-main-tab-btn${adminTab === "drive" ? " is-active" : ""}`}
+                onClick={() => setAdminTab("drive")}
+              >
+                <IconFolder size={15} stroke={1.8} /> Mon Drive Fichiers
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="content admin-content">
           {!isSupabaseConfigured ? (
@@ -524,6 +555,8 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                 </form>
               </div>
             </div>
+          ) : adminTab === "drive" ? (
+            <AdminDrive />
           ) : (
             /* Dashboard complet */
             <div className="admin-dashboard-view">
