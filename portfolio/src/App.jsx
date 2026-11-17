@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, lazy, Suspense } from "react";
 import { Modal } from "@mantine/core";
 import {
   IconBrandGithub,
@@ -15,6 +15,12 @@ import {
   IconCopy,
 } from "@tabler/icons-react";
 import { LANGUAGES, translations } from "./translations";
+import { analytics, initEngagementTracking } from "./lib/analytics";
+import { supabase, isSupabaseConfigured } from "./lib/supabase";
+
+const AdminPage = lazy(() =>
+  import("./components/AdminPage").then((mod) => ({ default: mod.AdminPage }))
+);
 
 const EMAIL = "contact@kevivois.ch";
 
@@ -186,8 +192,10 @@ function CopyEmail() {
     try {
       await navigator.clipboard.writeText(EMAIL);
       setCopied(true);
+      analytics.contactClick("email_copy");
       setTimeout(() => setCopied(false), 1800);
     } catch {
+      analytics.contactClick("email_mailto_fallback");
       window.location.href = `mailto:${EMAIL}`;
     }
   };
@@ -405,7 +413,12 @@ function ProjectModule({ project, onPreview, index }) {
           <ul className="project-links" aria-label={`${t.projects.linksLabel} ${project.title}`}>
             {project.links.map((link) => (
               <li key={link.href}>
-                <a href={link.href} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => analytics.projectClick(project.title, link.label)}
+                >
                   {link.label}<span aria-hidden="true"> <IconArrowUpRight className="inline-arrow" stroke={1.7} /></span>
                 </a>
               </li>
@@ -512,19 +525,102 @@ function App() {
     return "fr";
   });
 
+  const [route, setRoute] = useState(() => {
+    if (typeof window === "undefined") return "/";
+    const path = window.location.pathname.replace(/\/$/, "");
+    if (path === "/admin" || window.location.hash === "#admin") return "/admin";
+    return "/";
+  });
+
+  // Détection de la session administrateur pour navigation fluide sans reconnexion
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAdminLoggedIn(Boolean(session && session.user));
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAdminLoggedIn(Boolean(session && session.user));
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   const t = translations[lang] || translations.fr;
+
+  // Navigation interne sans rechargement
+  const navigateTo = (path) => {
+    window.history.pushState(null, "", path);
+    setRoute(path);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Suivi de l'URL et raccourcis
+  useEffect(() => {
+    const handleLocation = () => {
+      const path = window.location.pathname.replace(/\/$/, "");
+      if (path === "/admin" || window.location.hash === "#admin") {
+        setRoute("/admin");
+      } else {
+        setRoute("/");
+      }
+    };
+
+    window.addEventListener("popstate", handleLocation);
+    window.addEventListener("hashchange", handleLocation);
+
+    // Raccourci clavier discret : Ctrl + Shift + A
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "A" || e.key === "a")) {
+        e.preventDefault();
+        navigateTo(window.location.pathname.includes("/admin") ? "/" : "/admin");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("popstate", handleLocation);
+      window.removeEventListener("hashchange", handleLocation);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  // Envoi de la télémétrie et suivi de l'engagement (durée, scroll, clics sortants)
+  useEffect(() => {
+    if (route !== "/admin") {
+      analytics.pageView(window.location.pathname || "/");
+      const cleanup = initEngagementTracking();
+      return cleanup;
+    }
+  }, [route]);
 
   useEffect(() => {
     localStorage.setItem("portfolio_lang", lang);
     document.documentElement.lang = lang === "fr" ? "fr-CH" : lang;
-    if (t?.meta?.title) {
-      document.title = t.meta.title;
+    if (route !== "/admin") {
+      if (t?.meta?.title) {
+        document.title = t.meta.title;
+      }
+      const metaDesc = document.querySelector('meta[name="description"]');
+      if (metaDesc && t?.meta?.description) {
+        metaDesc.setAttribute("content", t.meta.description);
+      }
+    } else {
+      document.title = isAdminLoggedIn ? "Admin · Tableau de bord | Kevin Voisin" : "Accès réservé | Kevin Voisin";
     }
-    const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc && t?.meta?.description) {
-      metaDesc.setAttribute("content", t.meta.description);
+  }, [lang, t, route]);
+
+  const handleLanguageChange = (newLang) => {
+    if (newLang !== lang) {
+      analytics.langChange(lang, newLang);
+      setLang(newLang);
     }
-  }, [lang, t]);
+  };
 
   const activeSection = useActiveSection(sectionIds);
 
@@ -534,6 +630,30 @@ function App() {
     { id: "competences", label: t.nav.competences },
     { id: "contact", label: t.nav.contact },
   ];
+
+  // Si l'utilisateur est sur /admin, on affiche la vue Admin avec la DA du site
+  if (route === "/admin") {
+    return (
+      <Suspense
+        fallback={
+          <div
+            className="site-shell"
+            style={{
+              padding: 60,
+              textAlign: "center",
+              color: "var(--muted)",
+              fontFamily: "var(--mono)",
+              fontSize: 13,
+            }}
+          >
+            Chargement de l’espace admin...
+          </div>
+        }
+      >
+        <AdminPage onBack={() => navigateTo("/")} />
+      </Suspense>
+    );
+  }
 
   return (
     <LangContext.Provider value={{ lang, setLang, t }}>
@@ -556,8 +676,23 @@ function App() {
             ))}
           </nav>
           <div className="header-actions">
-            <LanguageSwitcher current={lang} onChange={setLang} />
-            <a className="header-contact" href={`mailto:${EMAIL}`}>
+            {isAdminLoggedIn && (
+              <button
+                type="button"
+                className="header-admin-pill"
+                onClick={() => navigateTo("/admin")}
+                title="Vous êtes connecté en tant qu'administrateur · Accéder à l'espace admin sans mot de passe"
+              >
+                <span className="admin-pill-dot" />
+                <span>Panel Admin</span>
+              </button>
+            )}
+            <LanguageSwitcher current={lang} onChange={handleLanguageChange} />
+            <a
+              className="header-contact"
+              href={`mailto:${EMAIL}`}
+              onClick={() => analytics.contactClick("email_header")}
+            >
               {t.header.contact} <span aria-hidden="true"><IconArrowUpRight className="inline-arrow" stroke={1.7} /></span>
             </a>
           </div>
@@ -632,6 +767,7 @@ function App() {
                     href="https://github.com/kevivois"
                     target="_blank"
                     rel="noreferrer"
+                    onClick={() => analytics.contactClick("github")}
                     icon={<IconBrandGithub size={18} stroke={1.7} aria-hidden="true" />}
                   >
                     GitHub
@@ -640,12 +776,18 @@ function App() {
                     href="https://linkedin.com/in/kevin-voisin"
                     target="_blank"
                     rel="noreferrer"
+                    onClick={() => analytics.contactClick("linkedin")}
                     icon={<IconBrandLinkedin size={18} stroke={1.7} aria-hidden="true" />}
                   >
                     LinkedIn
                   </SlideLink>
                 </div>
-                <a className="contact-cv" href="/Voisin_Kevin_CV.pdf" download="Kevin-Voisin-CV.pdf">
+                <a
+                  className="contact-cv"
+                  href="/Voisin_Kevin_CV.pdf"
+                  download="Kevin-Voisin-CV.pdf"
+                  onClick={() => analytics.cvDownload()}
+                >
                   {t.contact.cvDownload} <IconArrowDown className="inline-arrow" stroke={1.7} aria-hidden="true" />
                 </a>
               </div>
@@ -656,7 +798,20 @@ function App() {
           <footer className="page-footer content">
             <span>{t.footer.copyright}</span>
             <span>{t.footer.location}</span>
-            <a href="#accueil">{t.footer.top} <IconArrowUp className="inline-arrow" stroke={1.7} aria-hidden="true" /></a>
+            <div className="footer-links">
+              <a
+                href="/admin"
+                className="admin-trigger-link"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigateTo("/admin");
+                }}
+                title="Accéder à l'espace Admin (ou Ctrl+Shift+A)"
+              >
+                Admin
+              </a>
+              <a href="#accueil">{t.footer.top} <IconArrowUp className="inline-arrow" stroke={1.7} aria-hidden="true" /></a>
+            </div>
           </footer>
         </main>
       </div>
