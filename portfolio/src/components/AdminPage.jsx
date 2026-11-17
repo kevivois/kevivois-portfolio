@@ -359,8 +359,8 @@ export function AdminPage({ onBack }) {
                 Renseignez vos clés dans le fichier <code>portfolio/.env</code> :
               </p>
               <pre className="admin-code-block">
-{`VITE_SUPABASE_URL=https://votre-projet.supabase.co
-VITE_SUPABASE_ANON_KEY=votre-cle-anon-publique`}
+{`SUPABASE_URL=https://votre-projet.supabase.co
+SUPABASE_ANON_KEY=votre-cle-anon-publique`}
               </pre>
             </div>
           ) : !session ? (
