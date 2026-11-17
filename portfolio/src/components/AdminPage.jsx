@@ -146,7 +146,13 @@ export function AdminPage({ onBack }) {
 
       const { data, error } = await query;
       if (error) throw error;
-      setEvents(data || []);
+      // Exclure strictement tout événement d'administration ou de connexion
+      const cleanData = (data || []).filter((e) => {
+        const p = (e.page_path || "").toLowerCase();
+        const l = (e.event_label || "").toLowerCase();
+        return !p.includes("admin") && !l.includes("admin") && !l.includes("connexion") && !l.includes("login");
+      });
+      setEvents(cleanData);
     } catch (err) {
       console.error("Erreur analytics :", err);
     } finally {
@@ -172,6 +178,9 @@ export function AdminPage({ onBack }) {
         (payload) => {
           const newEvent = payload.new;
           if (newEvent) {
+            const p = (newEvent.page_path || "").toLowerCase();
+            const l = (newEvent.event_label || "").toLowerCase();
+            if (p.includes("admin") || l.includes("admin") || l.includes("connexion") || l.includes("login")) return;
             setEvents((prev) => [newEvent, ...prev.filter((e) => e.id !== newEvent.id)]);
             setNewLiveEventId(newEvent.id);
             setTimeout(() => setNewLiveEventId(null), 3000);
@@ -994,22 +1003,26 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                     {feedSearch ? `Aucun événement ne correspond à « ${feedSearch} ».` : "Aucun événement enregistré."}
                   </p>
                 ) : (
-                  <div className="admin-table-container">
-                    <table className="admin-table interactive-feed-table">
-                      <thead>
-                        <tr>
-                          <th>Date / Heure</th>
-                          <th>Événement</th>
-                          <th>Localisation &amp; Réseau</th>
-                          <th>Page consultée</th>
-                          <th>Détail / Action</th>
-                          <th>Appareil &amp; Vitesse</th>
-                          <th>Source / Référent</th>
-                          <th style={{ textAlign: "right" }}>Détails</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredRecentEvents.map((evt) => {
+                  <>
+                    <div className="table-mobile-hint">
+                      <span>⇄ Faites glisser horizontalement pour afficher toutes les colonnes</span>
+                    </div>
+                    <div className="admin-table-container">
+                      <table className="admin-table interactive-feed-table">
+                        <thead>
+                          <tr>
+                            <th>Date / Heure</th>
+                            <th>Événement</th>
+                            <th>Localisation &amp; Réseau</th>
+                            <th>Page consultée</th>
+                            <th>Détail / Action</th>
+                            <th>Appareil &amp; Vitesse</th>
+                            <th>Source / Référent</th>
+                            <th style={{ textAlign: "right" }}>Détails</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredRecentEvents.map((evt) => {
                           const isComp = typeof evt.is_company === "boolean"
                             ? evt.is_company
                             : isLikelyCompany(evt.organization, evt.isp);
@@ -1124,7 +1137,8 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                       </tbody>
                     </table>
                   </div>
-                )}
+                </>
+              )}
               </div>
 
               {/* MODAL / TIROIR D'INSPECTION DÉTAILLÉE D'UN ÉVÉNEMENT */}

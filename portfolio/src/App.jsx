@@ -601,8 +601,14 @@ function App() {
   }, []);
 
   // Envoi de la télémétrie et suivi de l'engagement (durée, scroll, clics sortants)
+  // Strictement désactivé sur l'espace d'administration et la page de connexion
   useEffect(() => {
-    if (route !== "/admin") {
+    const isAdminRoute =
+      route === "/admin" ||
+      window.location.pathname.includes("admin") ||
+      window.location.hash.includes("admin");
+
+    if (!isAdminRoute) {
       analytics.pageView(window.location.pathname || "/");
       const cleanup = initEngagementTracking();
       return cleanup;

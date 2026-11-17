@@ -175,7 +175,7 @@ export function LiveActivityChart({ events, timeRange }) {
     return { pathD: dStr, areaD: areaStr, points: pts, maxVal: max, totalVisits: sum };
   }, [timelineData]);
 
-  // Détection fluide au survol n'importe où sur le graphique (scrubbing sans effort)
+  // Détection fluide au survol ou au toucher sur le graphique (desktop & mobile/tablette)
   const handleSvgMouseMove = (e) => {
     if (!svgRef.current || !points.length) return;
     const rect = svgRef.current.getBoundingClientRect();
@@ -183,6 +183,25 @@ export function LiveActivityChart({ events, timeRange }) {
     const virtualX = mouseRatio * 640; // mapped to SVG viewBox width (640)
 
     // Trouver le point le plus proche sur l'axe X
+    let closest = points[0];
+    let minDiff = Math.abs(points[0].x - virtualX);
+    for (let i = 1; i < points.length; i++) {
+      const diff = Math.abs(points[i].x - virtualX);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = points[i];
+      }
+    }
+    setHoveredPoint(closest);
+  };
+
+  const handleSvgTouch = (e) => {
+    if (!svgRef.current || !points.length || !e.touches || !e.touches[0]) return;
+    const touch = e.touches[0];
+    const rect = svgRef.current.getBoundingClientRect();
+    const touchRatio = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+    const virtualX = touchRatio * 640;
+
     let closest = points[0];
     let minDiff = Math.abs(points[0].x - virtualX);
     for (let i = 1; i < points.length; i++) {
@@ -278,6 +297,9 @@ export function LiveActivityChart({ events, timeRange }) {
             ref={svgRef}
             onMouseMove={handleSvgMouseMove}
             onMouseLeave={handleSvgMouseLeave}
+            onTouchStart={handleSvgTouch}
+            onTouchMove={handleSvgTouch}
+            onTouchEnd={handleSvgMouseLeave}
           >
             <svg viewBox="0 0 640 180" className="admin-activity-svg" preserveAspectRatio="none">
               <defs>
@@ -413,6 +435,7 @@ export function LiveActivityChart({ events, timeRange }) {
                     key={m.minuteIndex}
                     className={`pulse-bar-col${isCurrentHover ? " is-hovered" : ""}`}
                     onMouseEnter={() => setHoveredMinute(m)}
+                    onTouchStart={() => setHoveredMinute(m)}
                   >
                     <div
                       className={`pulse-bar-fill${hasVisits ? " is-active" : ""}${isCurrentHover ? " is-focused" : ""}`}

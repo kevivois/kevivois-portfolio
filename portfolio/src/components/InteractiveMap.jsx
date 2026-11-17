@@ -135,9 +135,17 @@ export function InteractiveMap({ events }) {
     return () => clearTimeout(timer);
   }, [events]);
 
-  // Nettoyage au démontage
+  // Nettoyage au démontage et gestion du redimensionnement (tablette / mobile / rotation)
   useEffect(() => {
+    const handleResize = () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize();
+      }
+    };
+    window.addEventListener("resize", handleResize);
+
     return () => {
+      window.removeEventListener("resize", handleResize);
       if (mapInstanceRef.current) {
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;

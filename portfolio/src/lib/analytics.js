@@ -209,6 +209,15 @@ export async function isAdminAuthenticated() {
   }
 }
 
+// Vérifie si un chemin ou un libellé correspond à l'espace admin ou au login
+function isAdminRelated(path, label) {
+  const p = (path || "").toLowerCase();
+  const l = (label || "").toLowerCase();
+  if (p.includes("admin") || p.includes("login") || p.includes("auth")) return true;
+  if (l.includes("admin") || l.includes("login") || l.includes("connexion") || l.includes("authentification")) return true;
+  return false;
+}
+
 // Fonction centrale d'envoi d'événement
 export async function trackEvent(eventType, eventLabel = null, pagePath = null, extra = {}) {
   if (!isSupabaseConfigured || !supabase) {
@@ -216,7 +225,21 @@ export async function trackEvent(eventType, eventLabel = null, pagePath = null, 
   }
 
   try {
-    // Si l'administrateur est connecté, ignorer l'événement pour ne pas fausser les statistiques
+    // 1. Ne JAMAIS tracker quoi que ce soit sur l'admin ou le login
+    if (typeof window !== "undefined") {
+      const curPath = (window.location.pathname || "").toLowerCase();
+      const curHash = (window.location.hash || "").toLowerCase();
+      if (curPath.includes("admin") || curHash.includes("admin")) {
+        return;
+      }
+    }
+
+    // 2. Ne JAMAIS tracker un événement dont la page cible ou le libellé concerne l'admin ou le login
+    if (isAdminRelated(pagePath, eventLabel)) {
+      return;
+    }
+
+    // 3. Si l'administrateur est connecté, ignorer l'événement pour ne pas fausser les statistiques
     const isAdmin = await isAdminAuthenticated();
     if (isAdmin) {
       return;
@@ -261,6 +284,13 @@ export async function trackEvent(eventType, eventLabel = null, pagePath = null, 
 // Initialisateur automatique du suivi de l'engagement (durée, scroll, clics externes)
 export function initEngagementTracking() {
   if (typeof window === "undefined") return () => {};
+
+  // Ne jamais activer le suivi d'engagement si l'utilisateur est sur l'admin ou le login
+  const curPath = (window.location.pathname || "").toLowerCase();
+  const curHash = (window.location.hash || "").toLowerCase();
+  if (curPath.includes("admin") || curHash.includes("admin")) {
+    return () => {};
+  }
 
   const startTime = Date.now();
   let maxScroll = 0;
@@ -314,7 +344,13 @@ export function initEngagementTracking() {
 
   // 3. Détection automatique des clics sur n'importe quel lien et agrandissements d'images
   const handleClick = (e) => {
-    // A. Détection des clics sur les images / agrandissements
+    // A. Ignorer immédiatement tout clic menant à l'espace admin ou au login
+    const adminTrigger = e.target.closest("a[href*='admin'], .admin-trigger-link, .header-admin-pill, [data-admin]");
+    if (adminTrigger) {
+      return;
+    }
+
+    // B. Détection des clics sur les images / agrandissements
     const imgEl = e.target.closest("img, button[aria-haspopup='dialog'], .passion-photo, .project-preview");
     if (imgEl) {
       const img = imgEl.tagName === "IMG" ? imgEl : imgEl.querySelector("img");
@@ -323,12 +359,16 @@ export function initEngagementTracking() {
       return;
     }
 
-    // B. Détection de TOUS les liens <a>
+    // C. Détection de TOUS les liens <a>
     const link = e.target.closest("a");
     if (!link) return;
 
     const href = link.getAttribute("href") || "";
     const text = link.innerText?.trim() || link.getAttribute("aria-label") || href;
+
+    if (href.toLowerCase().includes("admin") || text.toLowerCase().includes("admin")) {
+      return;
+    }
 
     if (href.includes("github.com")) {
       trackEvent("outbound_click", "GitHub");
