@@ -38,9 +38,9 @@ export function InteractiveMap({ events }) {
         scrollWheelZoom: true,
       });
 
-      // Si une clé Carto est définie dans .env (CARTO_API_KEY), on l'utilise avec le paramètre ?key=
+      // Si une clé Carto est définie dans .env (VITE_CARTO_API_KEY ou CARTO_API_KEY), on l'utilise avec le paramètre ?key=
       // Sinon, on bascule automatiquement sur Esri World Light Gray (100% gratuit, sans clé, épuré et minimaliste).
-      const rawCartoKey = import.meta.env.CARTO_API_KEY;
+      const rawCartoKey = import.meta.env.VITE_CARTO_API_KEY || import.meta.env.CARTO_API_KEY;
       const cartoKey = rawCartoKey ? rawCartoKey.trim().replace(/^['"]|['"]$/g, "") : null;
 
       if (cartoKey) {

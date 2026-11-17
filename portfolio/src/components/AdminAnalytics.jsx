@@ -212,8 +212,8 @@ export function AdminAnalytics({ opened, onClose }) {
                 <code>portfolio/.env</code> contenant vos identifiants Supabase :
               </p>
               <pre>
-{`VITE_SUPABASE_URL=https://votre-projet.supabase.co
-VITE_SUPABASE_ANON_KEY=votre-cle-anon-publique`}
+{`SUPABASE_URL=https://votre-projet.supabase.co
+SUPABASE_ANON_KEY=votre-cle-anon-publique`}
               </pre>
               <p className="admin-notice-sub">
                 Pensez aussi à exécuter le script SQL fourni dans{" "}
