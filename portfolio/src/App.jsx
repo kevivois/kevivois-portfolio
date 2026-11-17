@@ -550,7 +550,16 @@ function App() {
     const hash = window.location.hash || "";
 
     if (path === "/admin" || path.startsWith("/admin") || hash.includes("admin")) {
-      return { path: "/admin", type: "admin" };
+      const isDrive =
+        path === "/admin/drive" ||
+        path.startsWith("/admin/drive") ||
+        hash.includes("admin/drive") ||
+        hash.includes("drive");
+      return {
+        path: window.location.pathname,
+        type: "admin",
+        subTab: isDrive ? "drive" : "stats",
+      };
     }
 
     if (
@@ -662,7 +671,7 @@ function App() {
   useEffect(() => {
     localStorage.setItem("portfolio_lang", lang);
     document.documentElement.lang = lang === "fr" ? "fr-CH" : lang;
-    if (route !== "/admin") {
+    if (!route.startsWith("/admin")) {
       if (t?.meta?.title) {
         document.title = t.meta.title;
       }
@@ -671,7 +680,14 @@ function App() {
         metaDesc.setAttribute("content", t.meta.description);
       }
     } else {
-      document.title = isAdminLoggedIn ? "Admin · Tableau de bord | Kevin Voisin" : "Accès réservé | Kevin Voisin";
+      if (!isAdminLoggedIn) {
+        document.title = "Accès réservé | Kevin Voisin";
+      } else {
+        document.title =
+          routeInfo.subTab === "drive"
+            ? "Admin · Mon Drive | Kevin Voisin"
+            : "Admin · Statistiques | Kevin Voisin";
+      }
     }
   }, [lang, t, route]);
 
@@ -750,8 +766,8 @@ function App() {
     );
   }
 
-  // Si l'utilisateur est sur /admin, on affiche la vue Admin avec la DA du site
-  if (routeInfo.type === "admin" || route === "/admin") {
+  // Si l'utilisateur est sur /admin (ou /admin/stats ou /admin/drive), on affiche l'admin
+  if (routeInfo.type === "admin" || route.startsWith("/admin")) {
     return (
       <Suspense
         fallback={
@@ -769,7 +785,10 @@ function App() {
           </div>
         }
       >
-        <AdminPage onBack={() => navigateTo("/")} />
+        <AdminPage
+          initialTab={routeInfo.subTab || "stats"}
+          onBack={() => navigateTo("/")}
+        />
       </Suspense>
     );
   }

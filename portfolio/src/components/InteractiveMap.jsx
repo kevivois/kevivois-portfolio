@@ -112,6 +112,19 @@ export function InteractiveMap({ events }) {
         }
       );
 
+      // Popup au clic ouvrant Google Maps
+      circle.bindPopup(
+        `<div style="font-family:var(--sans, system-ui);font-size:12px;line-height:1.4;color:#17231e;padding:2px 0;">
+          <strong style="font-size:13px;display:block;margin-bottom:2px;">${loc.city}</strong>
+          <span style="color:#64748b;">${loc.country || ""} · ${loc.count} visite${loc.count > 1 ? "s" : ""}</span>
+          <div style="margin-top:8px;">
+            <a href="https://www.google.com/maps?q=${loc.lat},${loc.lng}" target="_blank" rel="noreferrer" style="color:#245b46;font-weight:600;text-decoration:underline;">
+              Ouvrir dans Google Maps ↗
+            </a>
+          </div>
+        </div>`
+      );
+
       circle.addTo(markersLayer);
     });
 

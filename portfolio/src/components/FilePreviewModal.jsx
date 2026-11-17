@@ -7,6 +7,10 @@ import {
   IconFile,
   IconRefresh,
   IconAlertCircle,
+  IconFileSpreadsheet,
+  IconFileDescription,
+  IconPresentation,
+  IconExternalLink,
 } from "@tabler/icons-react";
 import { formatBytes } from "../lib/driveApi";
 
@@ -22,20 +26,31 @@ export function FilePreviewModal({
   const [textContent, setTextContent] = useState("");
   const [loadingText, setLoadingText] = useState(false);
   const [textError, setTextError] = useState("");
+  const [officeEngine, setOfficeEngine] = useState("microsoft"); // "microsoft" | "google"
+  const [officeLoading, setOfficeLoading] = useState(true);
 
   const filename = file?.name || "Fichier";
   const ext = filename.split(".").pop().toLowerCase();
   const mime = (file?.mimetype || "").toLowerCase();
 
-  // Détection des catégories de médias
+  // Détection des catégories de médias et documents
   const isImage = ["jpg", "jpeg", "png", "webp", "gif", "svg", "bmp", "ico"].includes(ext) || mime.startsWith("image/");
   const isPdf = ext === "pdf" || mime.includes("pdf");
   const isVideo = ["mp4", "webm", "mov", "ogg"].includes(ext) || mime.startsWith("video/");
   const isAudio = ["mp3", "wav", "ogg", "aac", "m4a", "flac"].includes(ext) || mime.startsWith("audio/");
-  const isText = [
-    "txt", "md", "json", "js", "jsx", "ts", "tsx", "html", "css",
-    "py", "sql", "csv", "xml", "log", "env", "yaml", "yml"
-  ].includes(ext) || mime.startsWith("text/") || mime.includes("json");
+
+  // Documents Microsoft Office & Suites bureautiques
+  const isExcel = ["xlsx", "xls", "xlsm", "xlsb"].includes(ext) || mime.includes("spreadsheet") || mime.includes("excel");
+  const isWord = ["docx", "doc", "docm", "dotx", "dot"].includes(ext) || mime.includes("wordprocessing") || mime.includes("msword");
+  const isPowerPoint = ["pptx", "ppt", "ppsx", "pps"].includes(ext) || mime.includes("presentation") || mime.includes("powerpoint");
+  const isOffice = isExcel || isWord || isPowerPoint;
+
+  const isText = !isOffice && (
+    [
+      "txt", "md", "json", "js", "jsx", "ts", "tsx", "html", "css",
+      "py", "sql", "csv", "xml", "log", "env", "yaml", "yml"
+    ].includes(ext) || mime.startsWith("text/") || mime.includes("json")
+  );
 
   // URL plein écran propre hébergée sur le site
   const resolvedPath = file?.path || filePath || filename;
@@ -61,6 +76,13 @@ export function FilePreviewModal({
       console.warn("Storage error:", e);
     }
   };
+
+  // Réinitialiser le chargement de la visionneuse Office quand l'URL ou le moteur change
+  useEffect(() => {
+    if (isOffice && url) {
+      setOfficeLoading(true);
+    }
+  }, [isOffice, url, officeEngine]);
 
   // Charger le contenu texte si fichier texte / code
   useEffect(() => {
@@ -162,6 +184,86 @@ export function FilePreviewModal({
                 title={filename}
                 className="preview-pdf-iframe"
               />
+            </div>
+          ) : isOffice ? (
+            <div className="preview-office-wrap">
+              <div className="preview-office-toolbar">
+                <div className="office-doc-type-badge">
+                  {isExcel ? (
+                    <>
+                      <IconFileSpreadsheet size={16} style={{ color: "#107c41" }} stroke={1.8} />
+                      <span>Classeur Excel · {ext.toUpperCase()}</span>
+                    </>
+                  ) : isWord ? (
+                    <>
+                      <IconFileDescription size={16} style={{ color: "#185abd" }} stroke={1.8} />
+                      <span>Document Word · {ext.toUpperCase()}</span>
+                    </>
+                  ) : (
+                    <>
+                      <IconPresentation size={16} style={{ color: "#c43e1c" }} stroke={1.8} />
+                      <span>Présentation PowerPoint · {ext.toUpperCase()}</span>
+                    </>
+                  )}
+                </div>
+
+                <div className="office-controls-right">
+                  <div className="office-engine-switcher" role="group" aria-label="Moteur de visionneuse">
+                    <button
+                      type="button"
+                      className={`office-engine-btn${officeEngine === "microsoft" ? " is-active" : ""}`}
+                      onClick={() => setOfficeEngine("microsoft")}
+                      title="Visionneuse officielle Microsoft Office 365 Web"
+                    >
+                      <span className="engine-dot ms-dot" /> Microsoft 365
+                    </button>
+                    <button
+                      type="button"
+                      className={`office-engine-btn${officeEngine === "google" ? " is-active" : ""}`}
+                      onClick={() => setOfficeEngine("google")}
+                      title="Visionneuse de secours Google Docs"
+                    >
+                      <span className="engine-dot google-dot" /> Google Docs
+                    </button>
+                  </div>
+
+                  <a
+                    href={
+                      officeEngine === "microsoft"
+                        ? `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`
+                        : `https://docs.google.com/viewer?url=${encodeURIComponent(url)}`
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                    className="office-popout-btn"
+                    title="Ouvrir la visionneuse dans un nouvel onglet"
+                  >
+                    <IconExternalLink size={13} stroke={1.8} /> Nouvel onglet
+                  </a>
+                </div>
+              </div>
+
+              <div className="preview-office-frame-box">
+                {officeLoading && (
+                  <div className="preview-office-loading">
+                    <IconRefresh size={22} className="spin-icon" />
+                    <span>
+                      Chargement de la visionneuse {officeEngine === "microsoft" ? "Microsoft Office 365" : "Google Docs"}...
+                    </span>
+                  </div>
+                )}
+                <iframe
+                  key={`${officeEngine}-${url}`}
+                  src={
+                    officeEngine === "microsoft"
+                      ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`
+                      : `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`
+                  }
+                  title={filename}
+                  className="preview-office-iframe"
+                  onLoad={() => setOfficeLoading(false)}
+                />
+              </div>
             </div>
           ) : isVideo ? (
             <div className="preview-video-wrap">

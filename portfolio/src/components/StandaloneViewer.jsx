@@ -11,6 +11,10 @@ import {
   IconCheck,
   IconCopy,
   IconShare,
+  IconFileSpreadsheet,
+  IconFileDescription,
+  IconPresentation,
+  IconExternalLink,
 } from "@tabler/icons-react";
 import { formatBytes, getFileDownloadUrl, getSharedDownloadUrl } from "../lib/driveApi";
 import { supabase } from "../lib/supabase";
@@ -29,6 +33,8 @@ export function StandaloneViewer({ token = "", filePath = "", fileName = "", onB
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [officeEngine, setOfficeEngine] = useState("microsoft"); // "microsoft" | "google"
+  const [officeLoading, setOfficeLoading] = useState(true);
   const viewerRef = useRef(null);
 
   // Écoute du changement d'état plein écran natif (F11 ou API HTML5)
@@ -51,13 +57,28 @@ export function StandaloneViewer({ token = "", filePath = "", fileName = "", onB
   const isPdf = ext === "pdf" || mime.includes("pdf");
   const isVideo = ["mp4", "webm", "mov", "ogg"].includes(ext) || mime.startsWith("video/");
   const isAudio = ["mp3", "wav", "ogg", "aac", "m4a", "flac"].includes(ext) || mime.startsWith("audio/");
-  const isText =
+
+  // Documents Microsoft Office & Suites bureautiques
+  const isExcel = ["xlsx", "xls", "xlsm", "xlsb"].includes(ext) || mime.includes("spreadsheet") || mime.includes("excel");
+  const isWord = ["docx", "doc", "docm", "dotx", "dot"].includes(ext) || mime.includes("wordprocessing") || mime.includes("msword");
+  const isPowerPoint = ["pptx", "ppt", "ppsx", "pps"].includes(ext) || mime.includes("presentation") || mime.includes("powerpoint");
+  const isOffice = isExcel || isWord || isPowerPoint;
+
+  const isText = !isOffice && (
     [
       "txt", "md", "json", "js", "jsx", "ts", "tsx", "html", "css",
       "py", "sql", "csv", "xml", "log", "env", "yaml", "yml"
     ].includes(ext) ||
     mime.startsWith("text/") ||
-    mime.includes("json");
+    mime.includes("json")
+  );
+
+  // Réinitialiser le chargement Office lors des changements
+  useEffect(() => {
+    if (isOffice && fileInfo.url) {
+      setOfficeLoading(true);
+    }
+  }, [isOffice, fileInfo.url, officeEngine]);
 
   // Chargement du fichier
   useEffect(() => {
@@ -330,6 +351,86 @@ export function StandaloneViewer({ token = "", filePath = "", fileName = "", onB
                   title={filename}
                   className="standalone-pdf-frame"
                 />
+              </div>
+            ) : isOffice ? (
+              <div className="standalone-office-canvas">
+                <div className="preview-office-toolbar standalone-office-bar">
+                  <div className="office-doc-type-badge">
+                    {isExcel ? (
+                      <>
+                        <IconFileSpreadsheet size={16} style={{ color: "#107c41" }} stroke={1.8} />
+                        <span>Classeur Excel · {ext.toUpperCase()}</span>
+                      </>
+                    ) : isWord ? (
+                      <>
+                        <IconFileDescription size={16} style={{ color: "#185abd" }} stroke={1.8} />
+                        <span>Document Word · {ext.toUpperCase()}</span>
+                      </>
+                    ) : (
+                      <>
+                        <IconPresentation size={16} style={{ color: "#c43e1c" }} stroke={1.8} />
+                        <span>Présentation PowerPoint · {ext.toUpperCase()}</span>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="office-controls-right">
+                    <div className="office-engine-switcher" role="group" aria-label="Moteur de visionneuse">
+                      <button
+                        type="button"
+                        className={`office-engine-btn${officeEngine === "microsoft" ? " is-active" : ""}`}
+                        onClick={() => setOfficeEngine("microsoft")}
+                        title="Visionneuse officielle Microsoft Office 365 Web"
+                      >
+                        <span className="engine-dot ms-dot" /> Microsoft 365
+                      </button>
+                      <button
+                        type="button"
+                        className={`office-engine-btn${officeEngine === "google" ? " is-active" : ""}`}
+                        onClick={() => setOfficeEngine("google")}
+                        title="Visionneuse de secours Google Docs"
+                      >
+                        <span className="engine-dot google-dot" /> Google Docs
+                      </button>
+                    </div>
+
+                    <a
+                      href={
+                        officeEngine === "microsoft"
+                          ? `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(fileInfo.url)}`
+                          : `https://docs.google.com/viewer?url=${encodeURIComponent(fileInfo.url)}`
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                      className="office-popout-btn"
+                      title="Ouvrir dans un nouvel onglet"
+                    >
+                      <IconExternalLink size={13} stroke={1.8} /> Nouvel onglet
+                    </a>
+                  </div>
+                </div>
+
+                <div className="preview-office-frame-box standalone-office-box">
+                  {officeLoading && (
+                    <div className="preview-office-loading">
+                      <IconRefresh size={26} className="spin-icon" stroke={1.5} />
+                      <span>
+                        Chargement de la visionneuse {officeEngine === "microsoft" ? "Microsoft Office 365" : "Google Docs"}...
+                      </span>
+                    </div>
+                  )}
+                  <iframe
+                    key={`${officeEngine}-${fileInfo.url}`}
+                    src={
+                      officeEngine === "microsoft"
+                        ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileInfo.url)}`
+                        : `https://docs.google.com/viewer?url=${encodeURIComponent(fileInfo.url)}&embedded=true`
+                    }
+                    title={filename}
+                    className="standalone-office-iframe"
+                    onLoad={() => setOfficeLoading(false)}
+                  />
+                </div>
               </div>
             ) : isVideo ? (
               <div className="standalone-video-canvas">

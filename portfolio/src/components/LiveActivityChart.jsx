@@ -190,16 +190,15 @@ export function LiveActivityChart({ events, timeRange }) {
     const counts = timelineData.map((d) => d.count);
     const max = Math.max(...counts, 3);
     const width = 640;
-    const height = 180;
     const paddingX = 28;
-    const paddingY = 24;
-
-    const innerW = width - paddingX * 2;
-    const innerH = height - paddingY * 2;
+    const topY = 24;
+    const baseY = 160;
+    const innerH = baseY - topY; // 136px
+    const innerW = width - paddingX * 2; // 584px
 
     const pts = timelineData.map((d, i) => {
       const x = paddingX + (i / Math.max(1, timelineData.length - 1)) * innerW;
-      const y = paddingY + innerH - (d.count / max) * innerH;
+      const y = baseY - (d.count / max) * innerH;
       return {
         x,
         y,
@@ -217,26 +216,84 @@ export function LiveActivityChart({ events, timeRange }) {
       return { pathD: "", areaD: "", points: pts, maxVal: max };
     }
 
-    // Calcul de courbe spline bezier naturelle
-    let dStr = `M ${pts[0].x} ${pts[0].y}`;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i === 0 ? i : i - 1];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
-      const p3 = pts[i + 2] || p2;
+    // Interpolation spline cubique monotone (Fritsch-Carlson)
+    // Garantit l'absence totale de dépassement sous zéro ou au-dessus du pic
+    const n = pts.length;
+    let dStr = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
 
-      const cp1x = p1.x + (p2.x - p0.x) / 6;
-      const cp1y = p1.y + (p2.y - p0.y) / 6;
-      const cp2x = p2.x - (p3.x - p1.x) / 6;
-      const cp2y = p2.y - (p3.y - p1.y) / 6;
+    if (n === 2) {
+      dStr += ` L ${pts[1].x.toFixed(1)} ${pts[1].y.toFixed(1)}`;
+    } else {
+      // 1. Calcul des deltas et pentes sécantes
+      const dxs = [];
+      const dys = [];
+      const slopes = [];
+      for (let i = 0; i < n - 1; i++) {
+        const dx = pts[i + 1].x - pts[i].x;
+        const dy = pts[i + 1].y - pts[i].y;
+        dxs.push(dx);
+        dys.push(dy);
+        slopes.push(dx === 0 ? 0 : dy / dx);
+      }
 
-      dStr += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+      // 2. Initialisation des pentes tangentielles
+      const m = new Array(n).fill(0);
+      m[0] = slopes[0];
+      m[n - 1] = slopes[n - 2];
+
+      for (let i = 1; i < n - 1; i++) {
+        const mPrev = slopes[i - 1];
+        const mNext = slopes[i];
+        if (mPrev * mNext <= 0) {
+          // Extremum local ou plateau : la tangente doit être strictement horizontale (pente nulle)
+          m[i] = 0;
+        } else {
+          // Moyenne harmonique pondérée
+          const dxPrev = dxs[i - 1];
+          const dxNext = dxs[i];
+          m[i] = (3 * (dxPrev + dxNext)) / ((2 * dxNext + dxPrev) / mPrev + (dxNext + 2 * dxPrev) / mNext);
+        }
+      }
+
+      // 3. Limitation Fritsch-Carlson pour garantir la monotonicité
+      for (let i = 0; i < n - 1; i++) {
+        if (slopes[i] === 0) {
+          m[i] = 0;
+          m[i + 1] = 0;
+        } else {
+          const alpha = m[i] / slopes[i];
+          const beta = m[i + 1] / slopes[i];
+          const hyp = alpha * alpha + beta * beta;
+          if (hyp > 9) {
+            const tau = 3 / Math.sqrt(hyp);
+            m[i] = tau * alpha * slopes[i];
+            m[i + 1] = tau * beta * slopes[i];
+          }
+        }
+      }
+
+      // 4. Construction des segments Bézier sans aucun creux ni dépassement
+      for (let i = 0; i < n - 1; i++) {
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const dx = dxs[i] / 3;
+
+        let cp1x = p1.x + dx;
+        let cp1y = p1.y + m[i] * dx;
+        let cp2x = p2.x - dx;
+        let cp2y = p2.y - m[i + 1] * dx;
+
+        // Protection géométrique : ne jamais plonger sous la ligne zéro (baseY) ni dépasser le haut
+        cp1y = Math.min(baseY, Math.max(topY, cp1y));
+        cp2y = Math.min(baseY, Math.max(topY, cp2y));
+
+        dStr += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)}, ${cp2x.toFixed(1)} ${cp2y.toFixed(1)}, ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+      }
     }
 
     const firstPt = pts[0];
     const lastPt = pts[pts.length - 1];
-    const baseY = paddingY + innerH;
-    const areaStr = `${dStr} L ${lastPt.x} ${baseY} L ${firstPt.x} ${baseY} Z`;
+    const areaStr = `${dStr} L ${lastPt.x.toFixed(1)} ${baseY} L ${firstPt.x.toFixed(1)} ${baseY} Z`;
 
     return { pathD: dStr, areaD: areaStr, points: pts, maxVal: max };
   }, [timelineData]);

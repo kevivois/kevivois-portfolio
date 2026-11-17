@@ -31,9 +31,10 @@ import {
   IconInfoCircle,
   IconExternalLink,
   IconFolder,
+  IconUserCheck,
 } from "@tabler/icons-react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
-import { isLikelyCompany } from "../lib/analytics";
+import { isLikelyCompany, computeHumanScore } from "../lib/analytics";
 import { InteractiveMap } from "./InteractiveMap";
 import { LiveActivityChart } from "./LiveActivityChart";
 import { AdminDrive } from "./AdminDrive";
@@ -72,15 +73,61 @@ function getEventBadgeInfo(type) {
   }
 }
 
-export function AdminPage({ onBack }) {
+export function AdminPage({ initialTab = "stats", onBack }) {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  // Onglet actif : "analytics" (stats) | "drive"
+  const [adminTab, setAdminTab] = useState(() => {
+    if (typeof window !== "undefined") {
+      const p = window.location.pathname.toLowerCase();
+      const h = (window.location.hash || "").toLowerCase();
+      if (p.includes("/admin/drive") || h.includes("drive")) return "drive";
+      if (p.includes("/admin/stats") || h.includes("stats")) return "analytics";
+    }
+    return initialTab === "drive" ? "drive" : "analytics";
+  });
+
+  // Synchronisation dynamique si initialTab change ou lors de l'historique navigateur (popstate)
+  useEffect(() => {
+    const handlePopState = () => {
+      const p = window.location.pathname.toLowerCase();
+      const h = (window.location.hash || "").toLowerCase();
+      if (p.includes("/admin/drive") || h.includes("drive")) {
+        setAdminTab("drive");
+      } else if (p.includes("/admin/stats") || p === "/admin" || h.includes("stats")) {
+        setAdminTab("analytics");
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    if (initialTab === "drive") {
+      setAdminTab("drive");
+    } else if (initialTab === "stats") {
+      setAdminTab("analytics");
+    }
+  }, [initialTab]);
+
+  // Changement d'onglet avec mise à jour propre de l'URL dans la barre d'adresse
+  const handleSwitchTab = (tab) => {
+    setAdminTab(tab);
+    const targetUrl = tab === "drive" ? "/admin/drive" : "/admin/stats";
+    if (window.location.pathname !== targetUrl) {
+      window.history.pushState(null, "", targetUrl);
+    }
+    document.title = tab === "drive"
+      ? "Admin · Mon Drive | Kevin Voisin"
+      : "Admin · Statistiques | Kevin Voisin";
+  };
+
   // Période sélectionnée : "24h", "7d", "30d", "all"
-  const [adminTab, setAdminTab] = useState("analytics"); // "analytics" | "drive"
   const [timeRange, setTimeRange] = useState("7d");
   const [events, setEvents] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
@@ -382,6 +429,12 @@ export function AdminPage({ onBack }) {
       browserCount[b] = (browserCount[b] || 0) + 1;
     });
 
+    // Indice d'humanité moyen de l'ensemble du trafic
+    const humanScores = events.map((e) => computeHumanScore(e).score);
+    const avgHumanScore = humanScores.length
+      ? Math.round(humanScores.reduce((a, b) => a + b, 0) / humanScores.length)
+      : 100;
+
     return {
       pageViews,
       uniqueSessions,
@@ -390,6 +443,7 @@ export function AdminPage({ onBack }) {
       outboundClicks,
       imageZooms,
       allClicks,
+      avgHumanScore,
       avgDurationText: formatDuration(avgDurationSec),
       avgScroll: avgScroll ? `${avgScroll}%` : "Non mesuré",
       activeNow,
@@ -455,6 +509,8 @@ export function AdminPage({ onBack }) {
                   ? adminTab === "drive"
                     ? "00 / 02 · Espace Cloud"
                     : "00 / 01 · Tableau de bord"
+                  : adminTab === "drive"
+                  ? "00 / 02 · Mon Drive Cloud"
                   : "00 / 01 · Authentification"}
               </p>
               <h1 id="cover-title">
@@ -466,21 +522,23 @@ export function AdminPage({ onBack }) {
           </div>
         </section>
 
-        {/* Sélecteur d'onglets principal : Statistiques vs Mon Drive */}
+        {/* Sélecteur d'onglets principal : Statistiques (/admin/stats) vs Mon Drive (/admin/drive) */}
         {session && (
           <div className="admin-tabs-nav-bar">
             <div className="admin-tabs-nav-inner">
               <button
                 type="button"
                 className={`admin-main-tab-btn${adminTab === "analytics" ? " is-active" : ""}`}
-                onClick={() => setAdminTab("analytics")}
+                onClick={() => handleSwitchTab("analytics")}
+                title="Consulter les statistiques d'audience (/admin/stats)"
               >
                 <IconActivity size={15} stroke={1.8} /> Statistiques &amp; Audience
               </button>
               <button
                 type="button"
                 className={`admin-main-tab-btn${adminTab === "drive" ? " is-active" : ""}`}
-                onClick={() => setAdminTab("drive")}
+                onClick={() => handleSwitchTab("drive")}
+                title="Accéder au gestionnaire de fichiers cloud (/admin/drive)"
               >
                 <IconFolder size={15} stroke={1.8} /> Mon Drive Fichiers
               </button>
@@ -688,6 +746,26 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                   </div>
                   <strong className="admin-metric-number">{stats.allClicks}</strong>
                 </div>
+
+                <div className="admin-metric-card" title="Pourcentage moyen de confiance humaine basé sur la durée, le scroll, les clics et le FAI">
+                  <div className="admin-metric-head">
+                    <span className="admin-metric-label">Indice d'humanité moyen</span>
+                    <IconUserCheck size={18} stroke={1.7} />
+                  </div>
+                  <strong
+                    className="admin-metric-number"
+                    style={{
+                      color:
+                        stats.avgHumanScore >= 75
+                          ? "#245b46"
+                          : stats.avgHumanScore >= 50
+                          ? "#d97706"
+                          : "#dc2626",
+                    }}
+                  >
+                    {stats.avgHumanScore}%
+                  </strong>
+                </div>
               </div>
 
               {/* SECTION GRAPHIQUES EN DIRECT */}
@@ -705,8 +783,8 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                   <div className="admin-map-container" aria-label="Carte interactive de répartition des visites">
                     <InteractiveMap events={events} />
                     <div className="admin-map-legend">
-                      <span><span className="legend-dot active" /> Villes détectées (survolez un point)</span>
-                      <span>Zoom &amp; déplacement OpenStreetMap</span>
+                      <span><span className="legend-dot active" /> Villes détectées (cliquez pour ouvrir Google Maps)</span>
+                      <span>Zoom &amp; déplacement</span>
                     </div>
                   </div>
 
@@ -1061,6 +1139,7 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                             : isLikelyCompany(evt.organization, evt.isp);
                           const orgLabel = evt.organization || evt.isp;
                           const badge = getEventBadgeInfo(evt.event_type);
+                          const humanScore = computeHumanScore(evt);
 
                           return (
                             <tr
@@ -1086,9 +1165,17 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                               </td>
 
                               <td>
-                                <span className={`admin-badge-type badge-${evt.event_type}`}>
-                                  {badge.icon} {badge.label}
-                                </span>
+                                <div className="event-badge-group">
+                                  <span className={`admin-badge-type badge-${evt.event_type}`}>
+                                    {badge.icon} {badge.label}
+                                  </span>
+                                  <span
+                                    className={`human-score-pill level-${humanScore.level}`}
+                                    title={`Fiabilité humaine : ${humanScore.score}% (${humanScore.label})`}
+                                  >
+                                    {humanScore.score}% humain
+                                  </span>
+                                </div>
                               </td>
 
                               <td className="cell-location">
@@ -1221,6 +1308,57 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                         </div>
                       </div>
 
+                      {/* Évaluation de la fiabilité humaine (Human Score) */}
+                      {(() => {
+                        const hs = computeHumanScore(selectedEvent);
+                        const scoreColor =
+                          hs.level === "high"
+                            ? "#245b46"
+                            : hs.level === "medium"
+                            ? "#2563eb"
+                            : hs.level === "neutral"
+                            ? "#d97706"
+                            : "#dc2626";
+
+                        return (
+                          <div className="inspect-human-card">
+                            <div className="inspect-human-head">
+                              <div className="inspect-human-title">
+                                <IconUserCheck size={18} stroke={1.8} color={scoreColor} />
+                                <strong>
+                                  Fiabilité humaine estimée :{" "}
+                                  <span style={{ color: scoreColor }}>{hs.score}%</span>
+                                </strong>
+                                <span className={`human-tag level-${hs.level}`}>{hs.label}</span>
+                              </div>
+                              <span className="inspect-human-metric-badge" style={{ backgroundColor: scoreColor }}>
+                                {hs.score}%
+                              </span>
+                            </div>
+
+                            <div className="inspect-human-progress">
+                              <div
+                                className="inspect-human-bar"
+                                style={{ width: `${hs.score}%`, backgroundColor: scoreColor }}
+                              />
+                            </div>
+
+                            {hs.reasons.length > 0 && (
+                              <ul className="inspect-human-reasons">
+                                {hs.reasons.map((r, i) => (
+                                  <li key={i} className={`reason-${r.type}`}>
+                                    <span>{r.type === "positive" ? "✓" : "⚠"} {r.text}</span>
+                                    <strong className="reason-delta">
+                                      {r.delta > 0 ? `+${r.delta}%` : `${r.delta}%`}
+                                    </strong>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       {/* 4 Blocs de détails structurés */}
                       <div className="inspect-grid">
                         {/* Bloc 1 : Localisation */}
@@ -1253,12 +1391,13 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
                               <li>
                                 <span>Coordonnées GPS</span>
                                 <a
-                                  href={`https://www.openstreetmap.org/?mlat=${selectedEvent.latitude}&mlon=${selectedEvent.longitude}#map=14/${selectedEvent.latitude}/${selectedEvent.longitude}`}
+                                  href={`https://www.google.com/maps?q=${selectedEvent.latitude},${selectedEvent.longitude}`}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="inspect-map-link"
+                                  title="Ouvrir l'emplacement dans Google Maps"
                                 >
-                                  {Number(selectedEvent.latitude).toFixed(4)}, {Number(selectedEvent.longitude).toFixed(4)} <IconExternalLink size={12} stroke={1.7} />
+                                  {Number(selectedEvent.latitude).toFixed(4)}, {Number(selectedEvent.longitude).toFixed(4)} (Google Maps) <IconExternalLink size={12} stroke={1.7} />
                                 </a>
                               </li>
                             ) : (

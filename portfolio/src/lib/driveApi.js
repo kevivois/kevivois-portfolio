@@ -313,3 +313,149 @@ export async function getSharedDownloadUrl(token, relativeFilePath = "") {
     size: data.size || blobData.size,
   };
 }
+
+// 8. LISTER TOUS LES DOSSIERS DU DRIVE (Arborescence complète pour le sélecteur "Déplacer vers...")
+export async function listAllFoldersRecursive() {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("Utilisateur non connecté");
+
+  const results = [{ path: "", name: "Mon Drive (Racine)", depth: 0 }];
+
+  async function explore(folderRelPath, depth = 1) {
+    const cleanFolder = folderRelPath ? folderRelPath.replace(/^\/+|\/+$/g, "") : "";
+    const storagePath = cleanFolder ? `${userId}/${cleanFolder}` : userId;
+
+    const { data, error } = await supabase.storage.from(BUCKET).list(storagePath, {
+      limit: 100,
+      sortBy: { column: "name", order: "asc" },
+    });
+    if (error || !data) return;
+
+    for (const item of data) {
+      if (item.name === ".keep") continue;
+      const isFolder = item.id === null || item.metadata === null || !item.metadata?.size;
+      if (isFolder) {
+        const itemRel = cleanFolder ? `${cleanFolder}/${item.name}` : item.name;
+        results.push({
+          path: itemRel,
+          name: item.name,
+          depth,
+        });
+        await explore(itemRel, depth + 1);
+      }
+    }
+  }
+
+  await explore("", 1);
+  return results;
+}
+
+// 9. DÉPLACER UN FICHIER OU UN DOSSIER (Drag & Drop ou sélection modale)
+export async function moveDriveItem(sourceRelPath, targetFolderRelPath, isFolder = false) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("Utilisateur non connecté");
+
+  const cleanSource = sourceRelPath.replace(/^\/+|\/+$/g, "");
+  const cleanTargetFolder = targetFolderRelPath ? targetFolderRelPath.replace(/^\/+|\/+$/g, "") : "";
+  const itemName = cleanSource.split("/").pop();
+
+  if (!itemName) throw new Error("Élément source introuvable");
+
+  if (isFolder) {
+    // Validation anti-boucle : Interdire de déplacer un dossier dans lui-même ou un de ses sous-dossiers
+    if (cleanTargetFolder === cleanSource || cleanTargetFolder.startsWith(`${cleanSource}/`)) {
+      throw new Error("Impossible de déplacer un dossier à l'intérieur de lui-même ou de ses sous-dossiers.");
+    }
+
+    const currentParent = cleanSource.includes("/")
+      ? cleanSource.slice(0, cleanSource.lastIndexOf("/"))
+      : "";
+    if (cleanTargetFolder === currentParent) {
+      return; // Déjà dans ce dossier parent, rien à faire
+    }
+
+    const newFolderPath = cleanTargetFolder ? `${cleanTargetFolder}/${itemName}` : itemName;
+
+    // Récupérer récursivement tous les fichiers à déplacer
+    const filesToMove = [];
+    async function collectFiles(folder) {
+      const storagePath = `${userId}/${folder}`;
+      const { data, error } = await supabase.storage.from(BUCKET).list(storagePath, { limit: 500 });
+      if (error || !data) return;
+
+      for (const item of data) {
+        const itemRel = `${folder}/${item.name}`;
+        const isSubFolder = item.id === null || item.metadata === null || !item.metadata?.size;
+        if (isSubFolder && item.name !== ".keep") {
+          await collectFiles(itemRel);
+        } else {
+          filesToMove.push(itemRel);
+        }
+      }
+    }
+
+    await collectFiles(cleanSource);
+
+    // Si le dossier ne contenait aucun fichier, s'assurer d'avoir au moins un fichier .keep à destination
+    if (filesToMove.length === 0) {
+      const dummyFile = new Blob([""], { type: "text/plain" });
+      await supabase.storage
+        .from(BUCKET)
+        .upload(`${userId}/${newFolderPath}/.keep`, dummyFile, { upsert: true });
+    } else {
+      for (const oldRel of filesToMove) {
+        const subRel = oldRel.slice(cleanSource.length).replace(/^\/+/, "");
+        const newRel = subRel ? `${newFolderPath}/${subRel}` : newFolderPath;
+        const fromKey = `${userId}/${oldRel}`;
+        const toKey = `${userId}/${newRel}`;
+        const { error: moveErr } = await supabase.storage.from(BUCKET).move(fromKey, toKey);
+        if (moveErr) console.warn("Erreur move fichier dossier:", oldRel, moveErr);
+      }
+    }
+
+    // Mettre à jour les liens de partage associés à ce dossier
+    try {
+      const { data: shares } = await supabase
+        .from("drive_shares")
+        .select("id, item_path")
+        .eq("user_id", userId);
+
+      for (const s of shares || []) {
+        if (s.item_path === cleanSource) {
+          await supabase.from("drive_shares").update({ item_path: newFolderPath }).eq("id", s.id);
+        } else if (s.item_path.startsWith(`${cleanSource}/`)) {
+          const sub = s.item_path.slice(cleanSource.length);
+          await supabase.from("drive_shares").update({ item_path: `${newFolderPath}${sub}` }).eq("id", s.id);
+        }
+      }
+    } catch (e) {
+      console.warn("Mise à jour drive_shares après déplacement dossier:", e);
+    }
+  } else {
+    // Déplacement d'un fichier simple
+    const currentParent = cleanSource.includes("/")
+      ? cleanSource.slice(0, cleanSource.lastIndexOf("/"))
+      : "";
+    if (cleanTargetFolder === currentParent) {
+      return; // Déjà dans ce dossier
+    }
+
+    const newFilePath = cleanTargetFolder ? `${cleanTargetFolder}/${itemName}` : itemName;
+    const fromKey = `${userId}/${cleanSource}`;
+    const toKey = `${userId}/${newFilePath}`;
+
+    const { error } = await supabase.storage.from(BUCKET).move(fromKey, toKey);
+    if (error) throw error;
+
+    // Mettre à jour le lien de partage si ce fichier était partagé
+    try {
+      await supabase
+        .from("drive_shares")
+        .update({ item_path: newFilePath })
+        .eq("user_id", userId)
+        .eq("item_path", cleanSource);
+    } catch (e) {
+      console.warn("Mise à jour drive_shares après déplacement fichier:", e);
+    }
+  }
+}

@@ -428,6 +428,146 @@ export function initEngagementTracking() {
   };
 }
 
+// Algorithme d'évaluation de l'indice d'humanité (Human Confidence Score)
+export function computeHumanScore(event) {
+  if (!event) return { score: 50, label: "Indéterminé", level: "neutral", reasons: [] };
+
+  let score = 40; // Base neutre de départ
+  const reasons = [];
+
+  const org = (event.organization || event.isp || "").toLowerCase();
+  const evtType = event.event_type || "";
+  const duration = typeof event.duration_seconds === "number" ? event.duration_seconds : 0;
+  const scroll = typeof event.scroll_depth === "number" ? event.scroll_depth : 0;
+  const res = event.screen_res || "";
+
+  // 1. Analyse du réseau et de l'hébergeur (-40% si datacenter / robot scraper)
+  const datacenterKeywords = [
+    "amazon", "aws", "google cloud", "microsoft azure", "azure", "hetzner",
+    "digitalocean", "ovh", "linode", "oracle cloud", "vultr", "alibaba",
+    "cloudflare", "fastly", "data center", "hosting", "server", "scaleway"
+  ];
+  const isDatacenter = datacenterKeywords.some((kw) => org.includes(kw));
+
+  if (isDatacenter) {
+    score -= 40;
+    reasons.push({
+      text: `Hébergement Datacenter / Cloud bot (${event.organization || event.isp})`,
+      delta: -40,
+      type: "negative",
+    });
+  } else if (org) {
+    score += 15;
+    reasons.push({
+      text: `Réseau résidentiel / FAI grand public (${event.organization || event.isp})`,
+      delta: +15,
+      type: "positive",
+    });
+  }
+
+  // 2. Comportement physique : Durée passée sur la page
+  if (duration >= 15) {
+    score += 25;
+    reasons.push({
+      text: `Temps de lecture significatif (${duration}s)`,
+      delta: +25,
+      type: "positive",
+    });
+  } else if (duration >= 5) {
+    score += 15;
+    reasons.push({
+      text: `Visite active (${duration}s)`,
+      delta: +15,
+      type: "positive",
+    });
+  } else if (duration > 0 && duration < 3) {
+    score -= 10;
+    reasons.push({
+      text: `Déconnexion quasi immédiate (${duration}s)`,
+      delta: -10,
+      type: "negative",
+    });
+  }
+
+  // 3. Comportement physique : Profondeur de scroll
+  if (scroll >= 50) {
+    score += 25;
+    reasons.push({
+      text: `Lecture approfondie du portfolio (scroll ${scroll}%)`,
+      delta: +25,
+      type: "positive",
+    });
+  } else if (scroll >= 25) {
+    score += 15;
+    reasons.push({
+      text: `Défilement partiel de la page (scroll ${scroll}%)`,
+      delta: +15,
+      type: "positive",
+    });
+  }
+
+  // 4. Actions intentionnelles et clics humains
+  if (["image_zoom", "cv_download", "contact_click", "outbound_click"].includes(evtType)) {
+    score += 30;
+    const actionLabel =
+      evtType === "cv_download"
+        ? "Téléchargement de CV"
+        : evtType === "image_zoom"
+        ? "Zoom photo / projet"
+        : evtType === "contact_click"
+        ? "Prise de contact / Copie email"
+        : "Clic sur lien externe (GitHub / LinkedIn)";
+    reasons.push({
+      text: `Action volontaire humaine : ${actionLabel}`,
+      delta: +30,
+      type: "positive",
+    });
+  }
+
+  // 5. Résolution d'écran et appareil
+  if (res && res !== "800x600" && res !== "1024x768" && !res.includes("0x0")) {
+    score += 10;
+    reasons.push({
+      text: `Résolution d'écran physique (${res})`,
+      delta: +10,
+      type: "positive",
+    });
+  } else if (res === "800x600" || res === "0x0") {
+    score -= 20;
+    reasons.push({
+      text: `Résolution suspecte typique des scripts headless (${res})`,
+      delta: -20,
+      type: "negative",
+    });
+  }
+
+  // 6. Langue du navigateur
+  if (event.user_language && event.user_language !== "unknown") {
+    score += 5;
+  }
+
+  // Borner entre 5% et 99%
+  const finalScore = Math.max(5, Math.min(99, score));
+
+  let label = "Humain vérifié";
+  let level = "high"; // green
+  if (finalScore >= 80) {
+    label = "Humain vérifié";
+    level = "high";
+  } else if (finalScore >= 60) {
+    label = "Humain probable";
+    level = "medium";
+  } else if (finalScore >= 40) {
+    label = "Incertain / Neutre";
+    level = "neutral";
+  } else {
+    label = "Robot / Crawler suspect";
+    level = "low";
+  }
+
+  return { score: finalScore, label, level, reasons };
+}
+
 // Événements prédéfinis pour le portfolio
 export const analytics = {
   pageView: (path) => trackEvent("page_view", null, path),

@@ -24,6 +24,11 @@ import {
   IconX,
   IconDatabase,
   IconEye,
+  IconArrowsExchange,
+  IconGripVertical,
+  IconFileSpreadsheet,
+  IconFileDescription,
+  IconPresentation,
 } from "@tabler/icons-react";
 import { FilePreviewModal } from "./FilePreviewModal";
 import {
@@ -37,6 +42,8 @@ import {
   listUserShares,
   revokeShareLink,
   getDriveStorageMetrics,
+  moveDriveItem,
+  listAllFoldersRecursive,
 } from "../lib/driveApi";
 
 // Helper icône selon le type MIME du fichier
@@ -47,7 +54,19 @@ function getFileIcon(filename = "", mimetype = "") {
   if (["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(ext) || mime.startsWith("image/")) {
     return <IconPhoto size={18} className="drive-icon-img" />;
   }
-  if (["pdf", "doc", "docx", "txt", "md"].includes(ext) || mime.includes("pdf") || mime.includes("text")) {
+  if (["xlsx", "xls", "xlsm", "xlsb"].includes(ext) || mime.includes("spreadsheet") || mime.includes("excel")) {
+    return <IconFileSpreadsheet size={18} style={{ color: "#107c41" }} />;
+  }
+  if (["docx", "doc", "docm", "dotx", "dot"].includes(ext) || mime.includes("wordprocessing") || mime.includes("msword")) {
+    return <IconFileDescription size={18} style={{ color: "#185abd" }} />;
+  }
+  if (["pptx", "ppt", "ppsx", "pps"].includes(ext) || mime.includes("presentation") || mime.includes("powerpoint")) {
+    return <IconPresentation size={18} style={{ color: "#c43e1c" }} />;
+  }
+  if (["pdf"].includes(ext) || mime.includes("pdf")) {
+    return <IconFileText size={18} className="drive-icon-doc" />;
+  }
+  if (["txt", "md"].includes(ext) || mime.includes("text")) {
     return <IconFileText size={18} className="drive-icon-doc" />;
   }
   if (["mp3", "wav", "ogg", "flac"].includes(ext) || mime.startsWith("audio/")) {
@@ -99,12 +118,124 @@ export function AdminDrive() {
   // Modal Visualisation / Aperçu en ligne
   const [previewData, setPreviewData] = useState(null); // { file, url }
 
+  // Déplacement d'éléments (Drag & Drop + Modal)
+  const [draggedItem, setDraggedItem] = useState(null); // { item, isFolder }
+  const [dragOverTarget, setDragOverTarget] = useState(null); // path string
+  const [moving, setMoving] = useState(false);
+  const [moveSuccessMessage, setMoveSuccessMessage] = useState("");
+
+  // Modal "Déplacer vers..."
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+  const [itemToMove, setItemToMove] = useState(null); // { item, isFolder }
+  const [availableFolders, setAvailableFolders] = useState([]);
+  const [loadingFolders, setLoadingFolders] = useState(false);
+  const [selectedMoveTarget, setSelectedMoveTarget] = useState("");
+
   const handlePreviewFile = async (file) => {
     try {
       const url = await getFileDownloadUrl(file.path, 3600);
       setPreviewData({ file, url });
     } catch (err) {
       alert("Impossible de prévisualiser ce fichier : " + err.message);
+    }
+  };
+
+  // Gestion du Drag & Drop à la souris
+  const handleDragStart = (e, item, isFolder) => {
+    setDraggedItem({ item, isFolder });
+    e.dataTransfer.setData("text/plain", item.path);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    setDragOverTarget(null);
+  };
+
+  const handleDragOverTarget = (e, targetFolderPath) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!draggedItem) return;
+
+    // Ne pas autoriser le dépôt sur soi-même
+    if (draggedItem.item.path === targetFolderPath) return;
+    if (
+      draggedItem.isFolder &&
+      (targetFolderPath === draggedItem.item.path || targetFolderPath.startsWith(`${draggedItem.item.path}/`))
+    ) {
+      return;
+    }
+
+    e.dataTransfer.dropEffect = "move";
+    if (dragOverTarget !== targetFolderPath) {
+      setDragOverTarget(targetFolderPath);
+    }
+  };
+
+  const handleDragLeaveTarget = (e, targetFolderPath) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragOverTarget === targetFolderPath) {
+      setDragOverTarget(null);
+    }
+  };
+
+  const handleDropOnTarget = async (e, targetFolderPath) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverTarget(null);
+    if (!draggedItem) return;
+
+    const sourcePath = draggedItem.item.path;
+    const isFolder = draggedItem.isFolder;
+    const itemName = draggedItem.item.name;
+    setDraggedItem(null);
+
+    await executeMove(sourcePath, targetFolderPath, isFolder, itemName);
+  };
+
+  // Exécuter le déplacement
+  const executeMove = async (sourcePath, targetFolderPath, isFolder, itemName) => {
+    const currentParent = sourcePath.includes("/")
+      ? sourcePath.slice(0, sourcePath.lastIndexOf("/"))
+      : "";
+    if (targetFolderPath === currentParent) {
+      return; // Déjà dans ce dossier
+    }
+
+    setMoving(true);
+    setErrorMsg("");
+    try {
+      await moveDriveItem(sourcePath, targetFolderPath, isFolder);
+      const targetName =
+        targetFolderPath === ""
+          ? "la racine Mon Drive"
+          : `le dossier « ${targetFolderPath.split("/").pop()} »`;
+      setMoveSuccessMessage(`« ${itemName} » a été déplacé dans ${targetName}.`);
+      setTimeout(() => setMoveSuccessMessage(""), 4500);
+      setIsMoveModalOpen(false);
+      setItemToMove(null);
+      await loadData();
+    } catch (err) {
+      alert("Erreur lors du déplacement : " + err.message);
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  // Ouvrir la modale "Déplacer vers..."
+  const handleOpenMoveModal = async (item, isFolder) => {
+    setItemToMove({ item, isFolder });
+    setSelectedMoveTarget(currentFolder);
+    setIsMoveModalOpen(true);
+    setLoadingFolders(true);
+    try {
+      const allFolders = await listAllFoldersRecursive();
+      setAvailableFolders(allFolders);
+    } catch (err) {
+      console.warn("Erreur chargement liste dossiers:", err);
+    } finally {
+      setLoadingFolders(false);
     }
   };
 
@@ -309,25 +440,34 @@ export function AdminDrive() {
 
       {/* 2. Barre d'outils et Fil d'Ariane */}
       <div className="drive-toolbar">
-        {/* Fil d'Ariane (Breadcrumbs) */}
+        {/* Fil d'Ariane (Breadcrumbs) avec zones de dépôt pour remonter les éléments */}
         <nav className="drive-breadcrumbs" aria-label="Arborescence Drive">
           <button
             type="button"
-            className={`breadcrumb-btn${breadcrumbParts.length === 0 ? " is-current" : ""}`}
+            className={`breadcrumb-btn${breadcrumbParts.length === 0 ? " is-current" : ""}${dragOverTarget === "" ? " is-drag-over" : ""}`}
             onClick={() => navigateToBreadcrumb(-1)}
+            onDragOver={(e) => handleDragOverTarget(e, "")}
+            onDragLeave={(e) => handleDragLeaveTarget(e, "")}
+            onDrop={(e) => handleDropOnTarget(e, "")}
+            title={draggedItem ? "Déposer ici pour déplacer à la racine Mon Drive" : "Mon Drive"}
           >
             <IconFolder size={15} stroke={1.7} /> Mon Drive
           </button>
           {breadcrumbParts.map((part, index) => {
             const isLast = index === breadcrumbParts.length - 1;
+            const targetPath = breadcrumbParts.slice(0, index + 1).join("/");
             return (
               <span key={index} className="breadcrumb-segment">
                 <IconChevronRight size={14} stroke={1.8} className="breadcrumb-sep" />
                 <button
                   type="button"
-                  className={`breadcrumb-btn${isLast ? " is-current" : ""}`}
+                  className={`breadcrumb-btn${isLast ? " is-current" : ""}${dragOverTarget === targetPath ? " is-drag-over" : ""}`}
                   onClick={() => navigateToBreadcrumb(index)}
                   disabled={isLast}
+                  onDragOver={(e) => !isLast && handleDragOverTarget(e, targetPath)}
+                  onDragLeave={(e) => !isLast && handleDragLeaveTarget(e, targetPath)}
+                  onDrop={(e) => !isLast && handleDropOnTarget(e, targetPath)}
+                  title={!isLast && draggedItem ? `Déposer ici pour déplacer dans « ${part} »` : part}
                 >
                   {part}
                 </button>
@@ -370,6 +510,25 @@ export function AdminDrive() {
         </div>
       </div>
 
+      {/* Bannière active lors du glisser-déposer */}
+      {draggedItem && (
+        <div className="drive-drag-indicator-bar">
+          <IconArrowsExchange size={16} stroke={2} />
+          <span>
+            Déplacement interactif de « <strong>{draggedItem.item.name}</strong> » en cours...
+            Glissez-le sur un dossier ou sur le fil d'Ariane ci-dessus pour le déposer.
+          </span>
+        </div>
+      )}
+
+      {/* Message de succès après déplacement */}
+      {moveSuccessMessage && (
+        <div className="drive-notice-success">
+          <IconCheck size={16} stroke={2} />
+          <span>{moveSuccessMessage}</span>
+        </div>
+      )}
+
       {errorMsg && (
         <div className="drive-notice-error">
           <IconAlertCircle size={16} stroke={2} />
@@ -402,110 +561,157 @@ export function AdminDrive() {
                 </tr>
               </thead>
               <tbody>
-                {/* Liste des Dossiers */}
-                {folders.map((folder) => (
-                  <tr
-                    key={folder.name}
-                    className="drive-row drive-row-folder"
-                    onDoubleClick={() => handleOpenFolder(folder.name)}
-                  >
-                    <td className="cell-item-name" onClick={() => handleOpenFolder(folder.name)}>
-                      <span className="folder-icon-wrap">
-                        <IconFolder size={18} stroke={1.7} />
-                      </span>
-                      <strong className="item-title">{folder.name}</strong>
-                    </td>
-                    <td className="cell-muted cell-mono">-</td>
-                    <td className="cell-muted cell-mono">Dossier</td>
-                    <td className="cell-actions">
-                      <button
-                        type="button"
-                        className="drive-action-btn"
-                        onClick={() => handleOpenFolder(folder.name)}
-                        title="Ouvrir le dossier"
-                      >
-                        Ouvrir
-                      </button>
-                      <button
-                        type="button"
-                        className="drive-action-btn"
-                        onClick={() => handleOpenShare(folder, true)}
-                        title="Créer un lien de partage pour ce dossier"
-                      >
-                        <IconShare size={13} stroke={1.8} /> Partager
-                      </button>
-                      <button
-                        type="button"
-                        className="drive-action-btn btn-delete"
-                        onClick={() => handleDelete(folder.path, true, folder.name)}
-                        title="Supprimer le dossier"
-                      >
-                        <IconTrash size={13} stroke={1.8} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {/* Liste des Dossiers (déplaçables et zones de dépôt) */}
+                {folders.map((folder) => {
+                  const isDragging = draggedItem?.isFolder && draggedItem?.item?.path === folder.path;
+                  const isDragOver = dragOverTarget === folder.path;
 
-                {/* Liste des Fichiers */}
-                {files.map((file) => (
-                  <tr key={file.name} className="drive-row drive-row-file">
-                    <td
-                      className="cell-item-name"
-                      onClick={() => handlePreviewFile(file)}
-                      style={{ cursor: "pointer" }}
-                      title="Cliquer pour prévisualiser en ligne"
+                  return (
+                    <tr
+                      key={folder.name}
+                      draggable="true"
+                      onDragStart={(e) => handleDragStart(e, folder, true)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={(e) => handleDragOverTarget(e, folder.path)}
+                      onDragLeave={(e) => handleDragLeaveTarget(e, folder.path)}
+                      onDrop={(e) => handleDropOnTarget(e, folder.path)}
+                      className={`drive-row drive-row-folder${isDragging ? " is-dragging" : ""}${isDragOver ? " is-drag-over" : ""}`}
+                      onDoubleClick={() => handleOpenFolder(folder.name)}
                     >
-                      <span className="file-icon-wrap">{getFileIcon(file.name, file.mimetype)}</span>
-                      <span className="item-title">{file.name}</span>
-                    </td>
-                    <td className="cell-muted cell-mono">
-                      {file.updated_at
-                        ? new Date(file.updated_at).toLocaleDateString("fr-CH", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : "-"}
-                    </td>
-                    <td className="cell-muted cell-mono">{formatBytes(file.size)}</td>
-                    <td className="cell-actions">
-                      <button
-                        type="button"
-                        className="drive-action-btn btn-preview-action"
+                      <td className="cell-item-name" onClick={() => handleOpenFolder(folder.name)}>
+                        <div className="cell-item-name-inner">
+                          <span className="file-drag-grip" title="Glisser à la souris pour déplacer">
+                            <IconGripVertical size={13} stroke={1.7} />
+                          </span>
+                          <span className="folder-icon-wrap">
+                            <IconFolder size={18} stroke={1.7} />
+                          </span>
+                          <strong className="item-title">{folder.name}</strong>
+                        </div>
+                      </td>
+                      <td className="cell-muted cell-mono">-</td>
+                      <td className="cell-muted cell-mono">Dossier</td>
+                      <td className="cell-actions">
+                        <button
+                          type="button"
+                          className="drive-action-btn"
+                          onClick={() => handleOpenFolder(folder.name)}
+                          title="Ouvrir le dossier"
+                        >
+                          Ouvrir
+                        </button>
+                        <button
+                          type="button"
+                          className="drive-action-btn"
+                          onClick={() => handleOpenMoveModal(folder, true)}
+                          title="Déplacer ce dossier vers un autre dossier"
+                        >
+                          <IconArrowsExchange size={13} stroke={1.8} /> Déplacer
+                        </button>
+                        <button
+                          type="button"
+                          className="drive-action-btn"
+                          onClick={() => handleOpenShare(folder, true)}
+                          title="Créer un lien de partage pour ce dossier"
+                        >
+                          <IconShare size={13} stroke={1.8} /> Partager
+                        </button>
+                        <button
+                          type="button"
+                          className="drive-action-btn btn-delete"
+                          onClick={() => handleDelete(folder.path, true, folder.name)}
+                          title="Supprimer le dossier"
+                        >
+                          <IconTrash size={13} stroke={1.8} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {/* Liste des Fichiers (déplaçables dans les dossiers ou fil d'Ariane) */}
+                {files.map((file) => {
+                  const isDragging = !draggedItem?.isFolder && draggedItem?.item?.path === file.path;
+
+                  return (
+                    <tr
+                      key={file.name}
+                      draggable="true"
+                      onDragStart={(e) => handleDragStart(e, file, false)}
+                      onDragEnd={handleDragEnd}
+                      className={`drive-row drive-row-file${isDragging ? " is-dragging" : ""}`}
+                    >
+                      <td
+                        className="cell-item-name"
                         onClick={() => handlePreviewFile(file)}
-                        title="Visualiser en ligne"
+                        style={{ cursor: "pointer" }}
+                        title="Cliquer pour prévisualiser en ligne (ou glisser pour déplacer)"
                       >
-                        <IconEye size={13} stroke={1.8} /> Aperçu
-                      </button>
-                      <button
-                        type="button"
-                        className="drive-action-btn"
-                        onClick={() => handleDownload(file.path)}
-                        title="Télécharger le fichier"
-                      >
-                        <IconDownload size={13} stroke={1.8} />
-                      </button>
-                      <button
-                        type="button"
-                        className="drive-action-btn"
-                        onClick={() => handleOpenShare(file, false)}
-                        title="Partager ce fichier"
-                      >
-                        <IconShare size={13} stroke={1.8} /> Partager
-                      </button>
-                      <button
-                        type="button"
-                        className="drive-action-btn btn-delete"
-                        onClick={() => handleDelete(file.path, false, file.name)}
-                        title="Supprimer le fichier"
-                      >
-                        <IconTrash size={13} stroke={1.8} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                        <div className="cell-item-name-inner">
+                          <span className="file-drag-grip" title="Glisser à la souris pour déplacer">
+                            <IconGripVertical size={13} stroke={1.7} />
+                          </span>
+                          <span className="file-icon-wrap">{getFileIcon(file.name, file.mimetype)}</span>
+                          <span className="item-title">{file.name}</span>
+                        </div>
+                      </td>
+                      <td className="cell-muted cell-mono">
+                        {file.updated_at
+                          ? new Date(file.updated_at).toLocaleDateString("fr-CH", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : "-"}
+                      </td>
+                      <td className="cell-muted cell-mono">{formatBytes(file.size)}</td>
+                      <td className="cell-actions">
+                        <button
+                          type="button"
+                          className="drive-action-btn btn-preview-action"
+                          onClick={() => handlePreviewFile(file)}
+                          title="Visualiser en ligne"
+                        >
+                          <IconEye size={13} stroke={1.8} /> Aperçu
+                        </button>
+                        <button
+                          type="button"
+                          className="drive-action-btn"
+                          onClick={() => handleOpenMoveModal(file, false)}
+                          title="Déplacer ce fichier vers un dossier"
+                        >
+                          <IconArrowsExchange size={13} stroke={1.8} /> Déplacer
+                        </button>
+                        <button
+                          type="button"
+                          className="drive-action-btn"
+                          onClick={() => handleDownload(file.path)}
+                          title="Télécharger le fichier"
+                        >
+                          <IconDownload size={13} stroke={1.8} />
+                        </button>
+                        <button
+                          type="button"
+                          className="drive-action-btn"
+                          onClick={() => handleOpenShare(file, false)}
+                          title="Partager ce fichier"
+                        >
+                          <IconShare size={13} stroke={1.8} /> Partager
+                        </button>
+                        <button
+                          type="button"
+                          className="drive-action-btn btn-delete"
+                          onClick={() => handleDelete(file.path, false, file.name)}
+                          title="Supprimer le fichier"
+                        >
+                          <IconTrash size={13} stroke={1.8} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -749,7 +955,105 @@ export function AdminDrive() {
         </div>
       )}
 
-      {/* 6. MODAL D'APERÇU / VISUALISATION EN LIGNE */}
+      {/* 6. MODAL DÉPLACER VERS... */}
+      {isMoveModalOpen && itemToMove && (
+        <div className="drive-modal-overlay" onClick={() => setIsMoveModalOpen(false)}>
+          <div className="drive-modal drive-move-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="drive-modal-head">
+              <div>
+                <span className="modal-kicker">Organisation des fichiers</span>
+                <h4>Déplacer « {itemToMove.item.name} »</h4>
+              </div>
+              <button
+                type="button"
+                className="drive-modal-close"
+                onClick={() => setIsMoveModalOpen(false)}
+                title="Fermer"
+              >
+                <IconX size={18} stroke={2} />
+              </button>
+            </div>
+
+            <div className="drive-modal-body">
+              <p className="move-modal-prompt">
+                Sélectionnez le dossier de destination pour{" "}
+                <strong>{itemToMove.isFolder ? `le dossier « ${itemToMove.item.name} » et tout son contenu` : `le fichier « ${itemToMove.item.name} »`}</strong> :
+              </p>
+
+              {loadingFolders ? (
+                <div className="move-loading">
+                  <IconRefresh size={20} className="spin-icon" stroke={1.8} />
+                  <span>Chargement de l'arborescence...</span>
+                </div>
+              ) : (
+                <div className="move-folder-tree">
+                  {availableFolders.map((f) => {
+                    const isCurrentParent = itemToMove.item.path.includes("/")
+                      ? itemToMove.item.path.slice(0, itemToMove.item.path.lastIndexOf("/")) === f.path
+                      : f.path === "";
+                    const isSelfOrChild =
+                      itemToMove.isFolder &&
+                      (f.path === itemToMove.item.path || f.path.startsWith(`${itemToMove.item.path}/`));
+                    const isSelected = selectedMoveTarget === f.path;
+                    const isDisabled = isCurrentParent || isSelfOrChild;
+
+                    return (
+                      <button
+                        key={f.path || "root"}
+                        type="button"
+                        className={`move-folder-item${isSelected ? " is-selected" : ""}${isDisabled ? " is-disabled" : ""}`}
+                        style={{ paddingLeft: `${16 + (f.depth || 0) * 18}px` }}
+                        onClick={() => !isDisabled && setSelectedMoveTarget(f.path)}
+                        disabled={isDisabled}
+                        title={
+                          isCurrentParent
+                            ? "Emplacement actuel"
+                            : isSelfOrChild
+                            ? "Impossible de déplacer un dossier dans lui-même"
+                            : f.path || "Racine Mon Drive"
+                        }
+                      >
+                        <IconFolder size={16} stroke={1.7} className="move-folder-icon" />
+                        <span className="move-folder-label">{f.name}</span>
+                        {isCurrentParent && <span className="move-tag-current">(Emplacement actuel)</span>}
+                        {isSelected && !isDisabled && <IconCheck size={16} stroke={2} className="move-check-icon" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="drive-modal-footer">
+              <button
+                type="button"
+                className="drive-btn drive-btn-secondary"
+                onClick={() => setIsMoveModalOpen(false)}
+                disabled={moving}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="drive-btn drive-btn-primary"
+                onClick={() =>
+                  executeMove(
+                    itemToMove.item.path,
+                    selectedMoveTarget,
+                    itemToMove.isFolder,
+                    itemToMove.item.name
+                  )
+                }
+                disabled={moving || loadingFolders}
+              >
+                {moving ? "Déplacement en cours..." : "Déplacer ici"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. MODAL D'APERÇU / VISUALISATION EN LIGNE */}
       <FilePreviewModal
         isOpen={Boolean(previewData)}
         onClose={() => setPreviewData(null)}

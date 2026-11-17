@@ -16,6 +16,9 @@ import {
   IconArrowLeft,
   IconRefresh,
   IconEye,
+  IconFileSpreadsheet,
+  IconFileDescription,
+  IconPresentation,
 } from "@tabler/icons-react";
 import { FilePreviewModal } from "./FilePreviewModal";
 import {
@@ -32,7 +35,19 @@ function getFileIcon(filename = "", mimetype = "") {
   if (["png", "jpg", "jpeg", "webp", "gif", "svg"].includes(ext) || mime.startsWith("image/")) {
     return <IconPhoto size={18} className="drive-icon-img" />;
   }
-  if (["pdf", "doc", "docx", "txt", "md"].includes(ext) || mime.includes("pdf") || mime.includes("text")) {
+  if (["xlsx", "xls", "xlsm", "xlsb"].includes(ext) || mime.includes("spreadsheet") || mime.includes("excel")) {
+    return <IconFileSpreadsheet size={18} style={{ color: "#107c41" }} />;
+  }
+  if (["docx", "doc", "docm", "dotx", "dot"].includes(ext) || mime.includes("wordprocessing") || mime.includes("msword")) {
+    return <IconFileDescription size={18} style={{ color: "#185abd" }} />;
+  }
+  if (["pptx", "ppt", "ppsx", "pps"].includes(ext) || mime.includes("presentation") || mime.includes("powerpoint")) {
+    return <IconPresentation size={18} style={{ color: "#c43e1c" }} />;
+  }
+  if (["pdf"].includes(ext) || mime.includes("pdf")) {
+    return <IconFileText size={18} className="drive-icon-doc" />;
+  }
+  if (["txt", "md"].includes(ext) || mime.includes("text")) {
     return <IconFileText size={18} className="drive-icon-doc" />;
   }
   if (["mp3", "wav", "ogg", "flac"].includes(ext) || mime.startsWith("audio/")) {
@@ -303,14 +318,16 @@ export function SharedView({ token, onBack }) {
                             style={{ cursor: "pointer" }}
                             title={isFolder ? "Ouvrir le dossier" : "Visualiser en ligne"}
                           >
-                            <span className={isFolder ? "folder-icon-wrap" : "file-icon-wrap"}>
-                              {isFolder ? (
-                                <IconFolder size={18} stroke={1.7} />
-                              ) : (
-                                getFileIcon(item.name, item.mimetype)
-                              )}
-                            </span>
-                            <span className="item-title">{item.name}</span>
+                            <div className="cell-item-name-inner">
+                              <span className={isFolder ? "folder-icon-wrap" : "file-icon-wrap"}>
+                                {isFolder ? (
+                                  <IconFolder size={18} stroke={1.7} />
+                                ) : (
+                                  getFileIcon(item.name, item.mimetype)
+                                )}
+                              </span>
+                              <span className="item-title">{item.name}</span>
+                            </div>
                           </td>
                           <td className="cell-muted cell-mono">
                             {isFolder ? "Dossier" : formatBytes(item.size)}
