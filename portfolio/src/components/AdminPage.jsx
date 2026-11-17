@@ -1525,7 +1525,7 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
         {/* Footer conforme à la DA */}
         <footer className="page-footer content">
           <span>© 2026 Kevin Voisin</span>
-          <span>Espace sécurisé Supabase</span>
+          <span>Espace sécurisé</span>
           <button type="button" className="admin-back-bottom-btn" onClick={onBack}>
             <IconArrowLeft className="inline-arrow" stroke={1.7} /> Retour au portfolio
           </button>
