@@ -825,6 +825,7 @@ function App() {
           </footer>
         </main>
       </div>
+      <Analytics />
     </LangContext.Provider>
   );
 }
