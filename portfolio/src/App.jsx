@@ -17,6 +17,7 @@ import {
 import { LANGUAGES, translations } from "./translations";
 import { analytics, initEngagementTracking } from "./lib/analytics";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
+import { Analytics } from "@vercel/analytics/react";
 
 const AdminPage = lazy(() =>
   import("./components/AdminPage").then((mod) => ({ default: mod.AdminPage }))
