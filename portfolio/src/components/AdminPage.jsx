@@ -32,12 +32,14 @@ import {
   IconExternalLink,
   IconFolder,
   IconUserCheck,
+  IconTicket,
 } from "@tabler/icons-react";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import { isLikelyCompany, computeHumanScore } from "../lib/analytics";
 import { InteractiveMap } from "./InteractiveMap";
 import { LiveActivityChart } from "./LiveActivityChart";
 import { AdminDrive } from "./AdminDrive";
+import { AdminTickets } from "./AdminTickets";
 
 function getCountryFlag(code) {
   if (!code || code.length !== 2) return "🌐";
@@ -80,15 +82,16 @@ export function AdminPage({ initialTab = "stats", onBack }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Onglet actif : "analytics" (stats) | "drive"
+  // Onglet actif : "analytics" (stats) | "drive" | "tickets"
   const [adminTab, setAdminTab] = useState(() => {
     if (typeof window !== "undefined") {
       const p = window.location.pathname.toLowerCase();
       const h = (window.location.hash || "").toLowerCase();
+      if (p.includes("/admin/tickets") || h.includes("tickets")) return "tickets";
       if (p.includes("/admin/drive") || h.includes("drive")) return "drive";
       if (p.includes("/admin/stats") || h.includes("stats")) return "analytics";
     }
-    return initialTab === "drive" ? "drive" : "analytics";
+    return initialTab === "tickets" ? "tickets" : initialTab === "drive" ? "drive" : "analytics";
   });
 
   // Synchronisation dynamique si initialTab change ou lors de l'historique navigateur (popstate)
@@ -96,7 +99,9 @@ export function AdminPage({ initialTab = "stats", onBack }) {
     const handlePopState = () => {
       const p = window.location.pathname.toLowerCase();
       const h = (window.location.hash || "").toLowerCase();
-      if (p.includes("/admin/drive") || h.includes("drive")) {
+      if (p.includes("/admin/tickets") || h.includes("tickets")) {
+        setAdminTab("tickets");
+      } else if (p.includes("/admin/drive") || h.includes("drive")) {
         setAdminTab("drive");
       } else if (p.includes("/admin/stats") || p === "/admin" || h.includes("stats")) {
         setAdminTab("analytics");
@@ -108,7 +113,9 @@ export function AdminPage({ initialTab = "stats", onBack }) {
   }, []);
 
   useEffect(() => {
-    if (initialTab === "drive") {
+    if (initialTab === "tickets") {
+      setAdminTab("tickets");
+    } else if (initialTab === "drive") {
       setAdminTab("drive");
     } else if (initialTab === "stats") {
       setAdminTab("analytics");
@@ -118,11 +125,13 @@ export function AdminPage({ initialTab = "stats", onBack }) {
   // Changement d'onglet avec mise à jour propre de l'URL dans la barre d'adresse
   const handleSwitchTab = (tab) => {
     setAdminTab(tab);
-    const targetUrl = tab === "drive" ? "/admin/drive" : "/admin/stats";
+    const targetUrl = tab === "tickets" ? "/admin/tickets" : tab === "drive" ? "/admin/drive" : "/admin/stats";
     if (window.location.pathname !== targetUrl) {
       window.history.pushState(null, "", targetUrl);
     }
-    document.title = tab === "drive"
+    document.title = tab === "tickets"
+      ? "Admin · Billetterie | Kevin Voisin"
+      : tab === "drive"
       ? "Admin · Mon Drive | Kevin Voisin"
       : "Admin · Statistiques | Kevin Voisin";
   };
@@ -508,6 +517,8 @@ export function AdminPage({ initialTab = "stats", onBack }) {
                 {session
                   ? adminTab === "drive"
                     ? "00 / 02 · Espace Cloud"
+                    : adminTab === "tickets"
+                    ? "00 / 03 · Contrôle & Billetterie"
                     : "00 / 01 · Tableau de bord"
                   : adminTab === "drive"
                   ? "00 / 02 · Mon Drive Cloud"
@@ -515,7 +526,7 @@ export function AdminPage({ initialTab = "stats", onBack }) {
               </p>
               <h1 id="cover-title">
                 <span className="hero-line">
-                  {session ? (adminTab === "drive" ? "Mon Drive." : "Statistiques.") : "Connexion."}
+                  {session ? (adminTab === "drive" ? "Mon Drive." : adminTab === "tickets" ? "Billetterie." : "Statistiques.") : "Connexion."}
                 </span>
               </h1>
             </div>
@@ -541,6 +552,14 @@ export function AdminPage({ initialTab = "stats", onBack }) {
                 title="Accéder au gestionnaire de fichiers cloud (/admin/drive)"
               >
                 <IconFolder size={15} stroke={1.8} /> Mon Drive Fichiers
+              </button>
+              <button
+                type="button"
+                className={`admin-main-tab-btn${adminTab === "tickets" ? " is-active" : ""}`}
+                onClick={() => handleSwitchTab("tickets")}
+                title="Gérer les billetteries, les billets et le contrôle d'accès (/admin/tickets)"
+              >
+                <IconTicket size={15} stroke={1.8} /> Gestion Billetterie
               </button>
             </div>
           </div>
@@ -615,6 +634,8 @@ SUPABASE_ANON_KEY=votre-cle-anon-publique`}
             </div>
           ) : adminTab === "drive" ? (
             <AdminDrive />
+          ) : adminTab === "tickets" ? (
+            <AdminTickets />
           ) : (
             /* Dashboard complet */
             <div className="admin-dashboard-view">

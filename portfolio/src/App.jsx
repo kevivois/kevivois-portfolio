@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, lazy, Suspense } from "react";
+import React, { createContext, useContext, useEffect, useState, lazy, Suspense, Component } from "react";
 import { Modal } from "@mantine/core";
 import {
   IconBrandGithub,
@@ -30,6 +30,57 @@ const SharedView = lazy(() =>
 const StandaloneViewer = lazy(() =>
   import("./components/StandaloneViewer").then((mod) => ({ default: mod.StandaloneViewer }))
 );
+
+const TicketsPage = lazy(() =>
+  import("./components/TicketsPage").then((mod) => ({ default: mod.default || mod.TicketsPage }))
+);
+
+class RouteErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("Route component error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="site-shell" style={{ padding: "80px 24px", maxWidth: 540, margin: "0 auto", textAlign: "center" }}>
+          <h3 style={{ fontFamily: "var(--display)", fontSize: 20, marginBottom: 12 }}>Impossible d'afficher la page</h3>
+          <p style={{ color: "var(--muted)", fontSize: 13, marginBottom: 24, lineHeight: 1.6 }}>
+            {this.state.error?.message || "Une erreur est survenue lors du chargement des composants."}
+          </p>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+            <button
+              type="button"
+              className="drive-btn drive-btn-primary"
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.reload();
+              }}
+            >
+              Recharger la page
+            </button>
+            <button
+              type="button"
+              className="drive-btn drive-btn-secondary"
+              onClick={() => {
+                window.location.href = "/";
+              }}
+            >
+              Retour à l'accueil
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const EMAIL = "contact@kevivois.ch";
 
@@ -550,6 +601,10 @@ function App() {
     const hash = window.location.hash || "";
 
     if (path === "/admin" || path.startsWith("/admin") || hash.includes("admin")) {
+      const isTickets =
+        path === "/admin/tickets" ||
+        path.startsWith("/admin/tickets") ||
+        hash.includes("admin/tickets");
       const isDrive =
         path === "/admin/drive" ||
         path.startsWith("/admin/drive") ||
@@ -558,7 +613,7 @@ function App() {
       return {
         path: window.location.pathname,
         type: "admin",
-        subTab: isDrive ? "drive" : "stats",
+        subTab: isTickets ? "tickets" : isDrive ? "drive" : "stats",
       };
     }
 
@@ -589,6 +644,22 @@ function App() {
         }
       }
       return { path: window.location.pathname, type: "share", token };
+    }
+
+    if (path === "/tickets" || path.startsWith("/tickets") || hash.includes("tickets")) {
+      if (
+        path === "/tickets/admin" ||
+        path.startsWith("/tickets/admin") ||
+        path === "/tickets/manage" ||
+        hash.includes("tickets/admin")
+      ) {
+        return {
+          path: "/admin/tickets",
+          type: "admin",
+          subTab: "tickets",
+        };
+      }
+      return { path: window.location.pathname, type: "tickets" };
     }
 
     return { path: "/", type: "home" };
@@ -793,6 +864,32 @@ function App() {
     );
   }
 
+  // Vue Billetterie & Contrôle d'accès (/tickets)
+  if (routeInfo.type === "tickets" || route.startsWith("/tickets")) {
+    return (
+      <RouteErrorBoundary>
+        <Suspense
+          fallback={
+            <div
+              className="site-shell"
+              style={{
+                padding: 60,
+                textAlign: "center",
+                color: "var(--muted)",
+                fontFamily: "var(--mono)",
+                fontSize: 13,
+              }}
+            >
+              Chargement de la billetterie...
+            </div>
+          }
+        >
+          <TicketsPage onNavigateHome={() => navigateTo("/")} />
+        </Suspense>
+      </RouteErrorBoundary>
+    );
+  }
+
   return (
     <LangContext.Provider value={{ lang, setLang, t }}>
       <div className={`site-shell${activeSection === "passions" ? " is-passion" : ""}`}>
@@ -920,14 +1017,40 @@ function App() {
                     LinkedIn
                   </SlideLink>
                 </div>
-                <a
-                  className="contact-cv"
-                  href="/Voisin_Kevin_CV.pdf"
-                  download="Kevin-Voisin-CV.pdf"
-                  onClick={() => analytics.cvDownload()}
-                >
-                  {t.contact.cvDownload} <IconArrowDown className="inline-arrow" stroke={1.7} aria-hidden="true" />
-                </a>
+                {/* Téléchargement dynamique selon la langue active (FR / EN / DE) */}
+                {(() => {
+                  const cvConfigs = {
+                    fr: {
+                      url: "/Voisin_Kevin_CV_FR.pdf",
+                      downloadName: "Kevin-Voisin-CV-FR.pdf",
+                      langLabel: "FR",
+                    },
+                    en: {
+                      url: "/Voisin_Kevin_CV_EN.pdf",
+                      downloadName: "Kevin-Voisin-CV-EN.pdf",
+                      langLabel: "EN",
+                    },
+                    de: {
+                      url: "/Voisin_Kevin_CV_DE.pdf",
+                      downloadName: "Kevin-Voisin-CV-DE.pdf",
+                      langLabel: "DE",
+                    },
+                  };
+                  const activeCv = cvConfigs[lang] || cvConfigs.fr;
+
+                  return (
+                    <a
+                      className="contact-cv"
+                      href={activeCv.url}
+                      download={activeCv.downloadName}
+                      onClick={() => analytics.cvDownload(`CV PDF (${activeCv.langLabel})`)}
+                      title={`${t.contact.cvDownload} (${activeCv.langLabel})`}
+                    >
+                      {t.contact.cvDownload} <span className="cv-lang-badge">{activeCv.langLabel}</span>{" "}
+                      <IconArrowDown className="inline-arrow" stroke={1.7} aria-hidden="true" />
+                    </a>
+                  );
+                })()}
               </div>
             </Reveal>
 
@@ -937,6 +1060,17 @@ function App() {
             <span>{t.footer.copyright}</span>
             <span>{t.footer.location}</span>
             <div className="footer-links">
+              <a
+                href="/tickets"
+                className="admin-trigger-link"
+                onClick={(e) => {
+                  e.preventDefault();
+                  navigateTo("/tickets");
+                }}
+                title="Accéder à la billetterie et au contrôle d'accès"
+              >
+                Billetterie
+              </a>
               <a
                 href="/admin"
                 className="admin-trigger-link"

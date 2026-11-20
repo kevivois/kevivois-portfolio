@@ -42,7 +42,7 @@ export async function listDriveItems(folderPath = "") {
   const files = [];
 
   (data || []).forEach((item) => {
-    if (item.name === ".keep") return; // Fichier placeholder masqué
+    if (item.name.startsWith(".")) return; // Ignore les fichiers et dossiers masqués (.keep, .trash, etc.)
 
     // Dans Supabase Storage, les dossiers ont id === null ou metadata === null
     const isFolder = item.id === null || item.metadata === null || !item.metadata?.size;
@@ -458,4 +458,210 @@ export async function moveDriveItem(sourceRelPath, targetFolderRelPath, isFolder
       console.warn("Mise à jour drive_shares après déplacement fichier:", e);
     }
   }
+}
+
+// ============================================================================
+// 10. ÉDITEUR DE TEXTE / NOTES MARKDOWN EN LIGNE
+// ============================================================================
+
+/**
+ * Sauvegarder directement le contenu texte d'un fichier dans Supabase Storage
+ */
+export async function saveTextFile(filePath, textContent) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("Utilisateur non connecté");
+
+  const cleanPath = filePath.replace(/^\/+|\/+$/g, "");
+  const storagePath = `${userId}/${cleanPath}`;
+
+  const blob = new Blob([textContent], { type: "text/plain;charset=utf-8" });
+  const { data, error } = await supabase.storage.from(BUCKET).upload(storagePath, blob, {
+    upsert: true,
+  });
+
+  if (error) throw error;
+  return { path: cleanPath, size: blob.size, data };
+}
+
+/**
+ * Créer une nouvelle note textuelle (.md ou .txt) dans le dossier courant
+ */
+export async function createNewTextNote(noteName, currentFolder = "", initialContent = "# Nouvelle note\n\nÉcrivez ici vos notes...") {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("Utilisateur non connecté");
+
+  let cleanName = noteName.trim().replace(/[\\/]/g, "_");
+  if (!cleanName) cleanName = `Note_${new Date().toISOString().slice(0, 10)}.md`;
+  if (!cleanName.includes(".")) cleanName += ".md";
+
+  const cleanFolder = currentFolder ? currentFolder.replace(/^\/+|\/+$/g, "") : "";
+  const relPath = cleanFolder ? `${cleanFolder}/${cleanName}` : cleanName;
+
+  return await saveTextFile(relPath, initialContent);
+}
+
+// ============================================================================
+// 11. CORBEILLE TEMPORAIRE (SOFT DELETE / 30 JOURS)
+// ============================================================================
+
+const TRASH_DIR = ".trash";
+const MANIFEST_PATH = ".trash_manifest.json";
+
+async function getTrashManifest(userId) {
+  try {
+    const { data, error } = await supabase.storage
+      .from(BUCKET)
+      .download(`${userId}/${MANIFEST_PATH}`);
+    if (error || !data) return [];
+    const text = await data.text();
+    return JSON.parse(text) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function saveTrashManifest(userId, manifest) {
+  const blob = new Blob([JSON.stringify(manifest, null, 2)], {
+    type: "application/json;charset=utf-8",
+  });
+  await supabase.storage.from(BUCKET).upload(`${userId}/${MANIFEST_PATH}`, blob, {
+    upsert: true,
+  });
+}
+
+/**
+ * Déplacer un élément dans la corbeille (Soft Delete)
+ */
+export async function moveToTrash(itemPath, isFolder = false, itemName = "", size = 0) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("Utilisateur non connecté");
+
+  const cleanPath = itemPath.replace(/^\/+|\/+$/g, "");
+  const name = itemName || cleanPath.split("/").pop();
+  const trashId = `trash_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const trashDest = `${TRASH_DIR}/${trashId}/${name}`;
+
+  if (isFolder) {
+    // Si dossier, déplacer son contenu récursivement dans la corbeille
+    await moveDriveItem(cleanPath, `${TRASH_DIR}/${trashId}`, true);
+  } else {
+    const fromKey = `${userId}/${cleanPath}`;
+    const toKey = `${userId}/${trashDest}`;
+    const { error: moveErr } = await supabase.storage.from(BUCKET).move(fromKey, toKey);
+    if (moveErr) throw moveErr;
+  }
+
+  // Mettre à jour le manifeste de corbeille
+  const manifest = await getTrashManifest(userId);
+  const now = Date.now();
+  manifest.unshift({
+    id: trashId,
+    name,
+    originalPath: cleanPath,
+    trashPath: trashDest,
+    isFolder,
+    size: size || 0,
+    deletedAt: now,
+    expiresAt: now + 30 * 24 * 3600 * 1000, // 30 jours de rétention
+  });
+
+  await saveTrashManifest(userId, manifest);
+  return { id: trashId, name };
+}
+
+/**
+ * Lister tous les éléments actuellement dans la corbeille
+ */
+export async function listTrashItems() {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
+  const manifest = await getTrashManifest(userId);
+  const now = Date.now();
+
+  return manifest.map((item) => {
+    const daysLeft = Math.max(0, Math.ceil((item.expiresAt - now) / (24 * 3600 * 1000)));
+    return {
+      ...item,
+      daysLeft,
+    };
+  });
+}
+
+/**
+ * Restaurer un élément depuis la corbeille vers son emplacement d'origine
+ */
+export async function restoreFromTrash(trashId) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("Utilisateur non connecté");
+
+  const manifest = await getTrashManifest(userId);
+  const itemIndex = manifest.findIndex((m) => m.id === trashId);
+  if (itemIndex === -1) throw new Error("Élément introuvable dans la corbeille");
+
+  const item = manifest[itemIndex];
+  const targetParent = item.originalPath.includes("/")
+    ? item.originalPath.slice(0, item.originalPath.lastIndexOf("/"))
+    : "";
+
+  if (item.isFolder) {
+    const folderTrashPath = `${TRASH_DIR}/${trashId}/${item.name}`;
+    await moveDriveItem(folderTrashPath, targetParent, true);
+  } else {
+    const fromKey = `${userId}/${item.trashPath}`;
+    const toKey = `${userId}/${item.originalPath}`;
+    const { error: moveErr } = await supabase.storage.from(BUCKET).move(fromKey, toKey);
+    if (moveErr) throw moveErr;
+  }
+
+  // Retirer du manifeste et sauvegarder
+  manifest.splice(itemIndex, 1);
+  await saveTrashManifest(userId, manifest);
+  return item;
+}
+
+/**
+ * Supprimer définitivement un élément de la corbeille (irréversible)
+ */
+export async function permanentDeleteTrashItem(trashId) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("Utilisateur non connecté");
+
+  const manifest = await getTrashManifest(userId);
+  const itemIndex = manifest.findIndex((m) => m.id === trashId);
+  if (itemIndex === -1) return;
+
+  const item = manifest[itemIndex];
+  if (item.isFolder) {
+    const folderTrashPath = `${TRASH_DIR}/${trashId}`;
+    await deleteDriveItem(folderTrashPath, true);
+  } else {
+    await deleteDriveItem(item.trashPath, false);
+  }
+
+  manifest.splice(itemIndex, 1);
+  await saveTrashManifest(userId, manifest);
+}
+
+/**
+ * Vider intégralement la corbeille
+ */
+export async function emptyTrash() {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("Utilisateur non connecté");
+
+  const manifest = await getTrashManifest(userId);
+  for (const item of manifest) {
+    try {
+      if (item.isFolder) {
+        await deleteDriveItem(`${TRASH_DIR}/${item.id}`, true);
+      } else {
+        await deleteDriveItem(item.trashPath, false);
+      }
+    } catch (e) {
+      console.warn("Erreur purge corbeille:", item.name, e);
+    }
+  }
+
+  await saveTrashManifest(userId, []);
 }

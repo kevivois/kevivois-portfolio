@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   IconX,
   IconDownload,
@@ -11,8 +11,41 @@ import {
   IconFileDescription,
   IconPresentation,
   IconExternalLink,
+  IconEdit,
+  IconEye,
+  IconDeviceFloppy,
+  IconCheck,
 } from "@tabler/icons-react";
-import { formatBytes } from "../lib/driveApi";
+import { formatBytes, saveTextFile } from "../lib/driveApi";
+
+// Rendu basique et sécurisé de Markdown
+function renderMarkdownBasic(md) {
+  if (!md) return "";
+  let html = md
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  html = html.replace(/```([a-z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+    return `<pre class="md-code-block"><code>${code.trim()}</code></pre>`;
+  });
+  html = html.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
+  html = html.replace(/^### (.*$)/gim, '<h3 class="md-h3">$1</h3>');
+  html = html.replace(/^## (.*$)/gim, '<h2 class="md-h2">$1</h2>');
+  html = html.replace(/^# (.*$)/gim, '<h1 class="md-h1">$1</h1>');
+  html = html.replace(/^\> (.*$)/gim, '<blockquote class="md-quote">$1</blockquote>');
+  html = html.replace(/^---$/gim, '<hr class="md-hr" />');
+  html = html.replace(/^- \[ \] (.*$)/gim, '<div class="md-todo"><input type="checkbox" disabled /> <span>$1</span></div>');
+  html = html.replace(/^- \[x\] (.*$)/gim, '<div class="md-todo is-checked"><input type="checkbox" checked disabled /> <span>$1</span></div>');
+  html = html.replace(/^[\*\-] (.*$)/gim, '<li class="md-li">$1</li>');
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer" class="md-link">$1</a>');
+  html = html.replace(/\n\n+/g, '</p><p class="md-p">');
+  html = html.replace(/\n/g, '<br/>');
+
+  return `<div class="md-rendered-body"><p class="md-p">${html}</p></div>`;
+}
 
 export function FilePreviewModal({
   isOpen,
@@ -22,10 +55,18 @@ export function FilePreviewModal({
   onDownload,
   shareToken = "",
   filePath = "",
+  onSaved = null,
 }) {
   const [textContent, setTextContent] = useState("");
+  const [initialText, setInitialText] = useState("");
   const [loadingText, setLoadingText] = useState(false);
   const [textError, setTextError] = useState("");
+  const [editorMode, setEditorMode] = useState("edit"); // "edit" | "preview"
+  const [isDirty, setIsDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const textareaRef = useRef(null);
+
   const [officeEngine, setOfficeEngine] = useState("microsoft"); // "microsoft" | "google"
   const [officeLoading, setOfficeLoading] = useState(true);
 
@@ -88,6 +129,8 @@ export function FilePreviewModal({
   useEffect(() => {
     if (!isOpen || !file) {
       setTextContent("");
+      setInitialText("");
+      setIsDirty(false);
       setTextError("");
       return;
     }
@@ -101,6 +144,9 @@ export function FilePreviewModal({
         })
         .then((txt) => {
           setTextContent(txt);
+          setInitialText(txt);
+          setIsDirty(false);
+          setEditorMode(ext === "md" ? "edit" : "edit");
         })
         .catch((err) => {
           setTextError("Erreur lors de la lecture du fichier : " + err.message);
@@ -109,7 +155,47 @@ export function FilePreviewModal({
           setLoadingText(false);
         });
     }
-  }, [isOpen, file, isText, url]);
+  }, [isOpen, file, isText, url, ext]);
+
+  // Sauvegarder les modifications apportées au fichier texte
+  const handleSaveContent = async () => {
+    if (!resolvedPath || shareToken || saving) return;
+    setSaving(true);
+    try {
+      await saveTextFile(resolvedPath, textContent);
+      setIsDirty(false);
+      setInitialText(textContent);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
+      if (onSaved) onSaved();
+    } catch (err) {
+      alert("Erreur lors de la sauvegarde : " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Raccourcis clavier dans la zone d'édition
+  const handleTextareaKeyDown = (e) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const start = e.target.selectionStart;
+      const end = e.target.selectionEnd;
+      const val = textContent;
+      const nextVal = val.substring(0, start) + "  " + val.substring(end);
+      setTextContent(nextVal);
+      setIsDirty(true);
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.selectionStart = textareaRef.current.selectionEnd = start + 2;
+        }
+      }, 0);
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      handleSaveContent();
+    }
+  };
 
   // Fermeture avec la touche Échap
   useEffect(() => {
@@ -275,7 +361,7 @@ export function FilePreviewModal({
               <audio src={url} controls autoPlay className="preview-audio" />
             </div>
           ) : isText ? (
-            <div className="preview-text-wrap">
+            <div className="preview-text-editor-wrap">
               {loadingText ? (
                 <div className="preview-loading">
                   <IconRefresh size={22} className="spin-icon" />
@@ -287,9 +373,105 @@ export function FilePreviewModal({
                   <p>{textError}</p>
                 </div>
               ) : (
-                <pre className="preview-code-block">
-                  <code>{textContent}</code>
-                </pre>
+                <div className="online-editor-container">
+                  {/* Barre d'outils de l'éditeur */}
+                  <div className="editor-toolbar">
+                    <div className="editor-toolbar-left">
+                      <span className="editor-file-badge">
+                        <IconEdit size={14} stroke={1.8} /> {ext.toUpperCase()}
+                      </span>
+                      {ext === "md" && (
+                        <div className="editor-mode-toggle" role="group">
+                          <button
+                            type="button"
+                            className={`editor-tab-btn${editorMode === "edit" ? " is-active" : ""}`}
+                            onClick={() => setEditorMode("edit")}
+                            title="Modifier le texte brut"
+                          >
+                            <IconEdit size={13} stroke={1.8} /> Édition
+                          </button>
+                          <button
+                            type="button"
+                            className={`editor-tab-btn${editorMode === "preview" ? " is-active" : ""}`}
+                            onClick={() => setEditorMode("preview")}
+                            title="Voir le rendu Markdown"
+                          >
+                            <IconEye size={13} stroke={1.8} /> Rendu Markdown
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="editor-toolbar-right">
+                      {shareToken ? (
+                        <span className="editor-readonly-tag">Lecture seule (partage)</span>
+                      ) : (
+                        <>
+                          <span className={`editor-dirty-indicator${isDirty ? " is-dirty" : ""}`}>
+                            {isDirty ? "● Non enregistré (Ctrl+S)" : "✓ À jour"}
+                          </span>
+
+                          <button
+                            type="button"
+                            className={`editor-save-btn${saveSuccess ? " is-success" : ""}`}
+                            onClick={handleSaveContent}
+                            disabled={saving || !isDirty}
+                            title="Sauvegarder directement dans Supabase Storage (Ctrl+S)"
+                          >
+                            {saving ? (
+                              <>
+                                <IconRefresh size={13} className="spin-icon" />
+                                <span>Enregistrement...</span>
+                              </>
+                            ) : saveSuccess ? (
+                              <>
+                                <IconCheck size={14} stroke={2.2} />
+                                <span>Enregistré !</span>
+                              </>
+                            ) : (
+                              <>
+                                <IconDeviceFloppy size={14} stroke={1.8} />
+                                <span>Enregistrer</span>
+                              </>
+                            )}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Zone de contenu : Éditeur ou Rendu Markdown */}
+                  <div className="editor-canvas-area">
+                    {editorMode === "edit" ? (
+                      <textarea
+                        ref={textareaRef}
+                        className="editor-textarea"
+                        value={textContent}
+                        onChange={(e) => {
+                          setTextContent(e.target.value);
+                          setIsDirty(true);
+                        }}
+                        onKeyDown={handleTextareaKeyDown}
+                        placeholder="Rédigez votre contenu ici..."
+                        readOnly={Boolean(shareToken)}
+                        spellCheck="false"
+                      />
+                    ) : (
+                      <div
+                        className="editor-markdown-preview"
+                        dangerouslySetInnerHTML={{ __html: renderMarkdownBasic(textContent) }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Barre d'état inférieure */}
+                  <div className="editor-statusbar">
+                    <span>
+                      {textContent.split("\n").length} ligne{textContent.split("\n").length > 1 ? "s" : ""} · {textContent.length} caractères · {textContent.trim() ? textContent.trim().split(/\s+/).length : 0} mots
+                    </span>
+                    <span>UTF-8 · Raccourci : <strong>Ctrl + S</strong> pour enregistrer</span>
+                  </div>
+                </div>
               )}
             </div>
           ) : (

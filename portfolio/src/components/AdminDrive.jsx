@@ -29,6 +29,9 @@ import {
   IconFileSpreadsheet,
   IconFileDescription,
   IconPresentation,
+  IconFilePlus,
+  IconArrowBackUp,
+  IconTrashX,
 } from "@tabler/icons-react";
 import { FilePreviewModal } from "./FilePreviewModal";
 import {
@@ -44,6 +47,13 @@ import {
   getDriveStorageMetrics,
   moveDriveItem,
   listAllFoldersRecursive,
+  saveTextFile,
+  createNewTextNote,
+  moveToTrash,
+  listTrashItems,
+  restoreFromTrash,
+  permanentDeleteTrashItem,
+  emptyTrash,
 } from "../lib/driveApi";
 
 // Helper icône selon le type MIME du fichier
@@ -130,6 +140,16 @@ export function AdminDrive() {
   const [availableFolders, setAvailableFolders] = useState([]);
   const [loadingFolders, setLoadingFolders] = useState(false);
   const [selectedMoveTarget, setSelectedMoveTarget] = useState("");
+
+  // Corbeille temporaire (Soft Delete / 30 jours)
+  const [isTrashView, setIsTrashView] = useState(false);
+  const [trashItems, setTrashItems] = useState([]);
+  const [trashLoading, setTrashLoading] = useState(false);
+
+  // Modal Nouvelle note
+  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [newNoteName, setNewNoteName] = useState("");
+  const [creatingNote, setCreatingNote] = useState(false);
 
   const handlePreviewFile = async (file) => {
     try {
@@ -261,9 +281,23 @@ export function AdminDrive() {
     }
   }, [currentFolder]);
 
+  // Charger les éléments de la corbeille
+  const loadTrashData = useCallback(async () => {
+    try {
+      setTrashLoading(true);
+      const items = await listTrashItems();
+      setTrashItems(items);
+    } catch (err) {
+      console.warn("Erreur chargement corbeille:", err);
+    } finally {
+      setTrashLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    loadTrashData();
+  }, [loadData, loadTrashData]);
 
   // Navigation dans l'arborescence (Breadcrumbs)
   const breadcrumbParts = currentFolder ? currentFolder.split("/").filter(Boolean) : [];
@@ -296,6 +330,35 @@ export function AdminDrive() {
     }
   };
 
+  // Création d'une nouvelle note texte ou Markdown (.md)
+  const handleCreateNote = async (e) => {
+    e.preventDefault();
+    const cleanName = newNoteName.trim();
+    if (!cleanName) return;
+
+    setCreatingNote(true);
+    try {
+      const res = await createNewTextNote(cleanName, currentFolder);
+      setIsNoteModalOpen(false);
+      setNewNoteName("");
+      await loadData();
+
+      // Ouvrir immédiatement la nouvelle note dans l'éditeur
+      const finalName = cleanName.includes(".") ? cleanName : `${cleanName}.md`;
+      const mockFile = {
+        name: finalName,
+        path: res.path,
+        size: res.size,
+        mimetype: "text/markdown",
+      };
+      await handlePreviewFile(mockFile);
+    } catch (err) {
+      alert("Erreur lors de la création de la note : " + err.message);
+    } finally {
+      setCreatingNote(false);
+    }
+  };
+
   // Téléversement de fichiers
   const handleFileUpload = async (e) => {
     const selectedFiles = e.target.files;
@@ -316,19 +379,64 @@ export function AdminDrive() {
     }
   };
 
-  // Suppression
-  const handleDelete = async (itemPath, isFolder, itemName) => {
+  // Suppression -> Déplacement sécurisé vers la corbeille (rétention 30 jours)
+  const handleDelete = async (itemPath, isFolder, itemName, size = 0) => {
     const confirmMsg = isFolder
-      ? `Supprimer définitivement le dossier « ${itemName} » et tout son contenu ?`
-      : `Supprimer définitivement le fichier « ${itemName} » ?`;
+      ? `Déplacer le dossier « ${itemName} » dans la corbeille ? (Conservation 30 jours)`
+      : `Déplacer « ${itemName} » dans la corbeille ? (Conservation 30 jours)`;
 
     if (!window.confirm(confirmMsg)) return;
 
     try {
-      await deleteDriveItem(itemPath, isFolder);
+      await moveToTrash(itemPath, isFolder, itemName, size);
+      setMoveSuccessMessage(`« ${itemName} » a été placé dans la corbeille.`);
+      setTimeout(() => setMoveSuccessMessage(""), 4500);
+      loadData();
+      loadTrashData();
+    } catch (err) {
+      alert("Erreur lors de la mise en corbeille : " + err.message);
+    }
+  };
+
+  // Restaurer un élément depuis la corbeille
+  const handleRestoreTrashItem = async (trashId, itemName) => {
+    try {
+      await restoreFromTrash(trashId);
+      setMoveSuccessMessage(`« ${itemName} » a été restauré à son emplacement d'origine.`);
+      setTimeout(() => setMoveSuccessMessage(""), 4500);
+      loadTrashData();
       loadData();
     } catch (err) {
-      alert("Erreur lors de la suppression : " + err.message);
+      alert("Erreur lors de la restauration : " + err.message);
+    }
+  };
+
+  // Suppression définitive d'un élément dans la corbeille
+  const handlePermanentDelete = async (trashId, itemName) => {
+    if (!window.confirm(`Supprimer DÉFINITIVEMENT « ${itemName} » ? Cette action est irréversible.`)) return;
+    try {
+      await permanentDeleteTrashItem(trashId);
+      setMoveSuccessMessage(`« ${itemName} » a été supprimé définitivement.`);
+      setTimeout(() => setMoveSuccessMessage(""), 4500);
+      loadTrashData();
+      loadData();
+    } catch (err) {
+      alert("Erreur lors de la suppression définitive : " + err.message);
+    }
+  };
+
+  // Vider complètement la corbeille
+  const handleEmptyTrash = async () => {
+    if (trashItems.length === 0) return;
+    if (!window.confirm(`Vider la corbeille ? Tous les éléments (${trashItems.length}) seront DÉTRUITS définitivement.`)) return;
+    try {
+      await emptyTrash();
+      setMoveSuccessMessage("La corbeille a été vidée.");
+      setTimeout(() => setMoveSuccessMessage(""), 4500);
+      loadTrashData();
+      loadData();
+    } catch (err) {
+      alert("Erreur lors du vidage de la corbeille : " + err.message);
     }
   };
 
@@ -481,6 +589,18 @@ export function AdminDrive() {
           <button
             type="button"
             className="drive-btn drive-btn-secondary"
+            onClick={() => {
+              setNewNoteName(`note-${new Date().toISOString().slice(0, 10)}.md`);
+              setIsNoteModalOpen(true);
+            }}
+            title="Créer une nouvelle note texte ou Markdown (.md)"
+          >
+            <IconFilePlus size={15} stroke={1.8} /> Nouvelle note
+          </button>
+
+          <button
+            type="button"
+            className="drive-btn drive-btn-secondary"
             onClick={() => setIsFolderModalOpen(true)}
             title="Créer un nouveau sous-dossier"
           >
@@ -501,11 +621,27 @@ export function AdminDrive() {
 
           <button
             type="button"
+            className={`drive-btn drive-btn-secondary drive-trash-toggle-btn${isTrashView ? " is-active" : ""}`}
+            onClick={() => {
+              setIsTrashView(!isTrashView);
+              if (!isTrashView) loadTrashData();
+            }}
+            title="Corbeille temporaire (conservation 30 jours)"
+          >
+            <IconTrash size={15} stroke={1.8} /> Corbeille
+            {trashItems.length > 0 && <span className="trash-count-badge">{trashItems.length}</span>}
+          </button>
+
+          <button
+            type="button"
             className="drive-btn drive-btn-icon"
-            onClick={loadData}
+            onClick={() => {
+              loadData();
+              loadTrashData();
+            }}
             title="Actualiser la liste des fichiers"
           >
-            <IconRefresh size={15} stroke={1.8} className={loading ? "spin-icon" : ""} />
+            <IconRefresh size={15} stroke={1.8} className={loading || trashLoading ? "spin-icon" : ""} />
           </button>
         </div>
       </div>
@@ -536,9 +672,128 @@ export function AdminDrive() {
         </div>
       )}
 
-      {/* 3. Explorateur de fichiers et dossiers */}
+      {/* 3. Explorateur de fichiers et dossiers OU Corbeille */}
       <div className="drive-explorer-view">
-        {loading ? (
+        {isTrashView ? (
+          <div className="drive-trash-container">
+            <div className="trash-header-banner">
+              <div>
+                <h4 className="trash-title">
+                  <IconTrash size={18} stroke={1.8} /> Corbeille temporaire
+                </h4>
+                <span className="trash-subtext">
+                  Les éléments supprimés restent conservés ici pendant 30 jours avant purge définitive. Vous pouvez les restaurer en un clic.
+                </span>
+              </div>
+              <div className="trash-header-actions">
+                <button
+                  type="button"
+                  className="drive-btn drive-btn-secondary"
+                  onClick={() => setIsTrashView(false)}
+                >
+                  ← Revenir à Mon Drive
+                </button>
+                {trashItems.length > 0 && (
+                  <button
+                    type="button"
+                    className="drive-btn btn-danger"
+                    onClick={handleEmptyTrash}
+                    title="Purger définitivement tous les éléments de la corbeille"
+                  >
+                    <IconTrashX size={15} stroke={1.8} /> Vider la corbeille ({trashItems.length})
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {trashLoading ? (
+              <div className="drive-loading-state">
+                <IconRefresh size={24} stroke={1.5} className="spin-icon" />
+                <p>Chargement de la corbeille...</p>
+              </div>
+            ) : trashItems.length === 0 ? (
+              <div className="drive-empty-state">
+                <IconTrash size={44} stroke={1.2} className="empty-folder-icon" />
+                <h4>La corbeille est vide</h4>
+                <p>Aucun document ni dossier n’a été placé dans la corbeille récemment.</p>
+                <button
+                  type="button"
+                  className="drive-btn drive-btn-secondary"
+                  onClick={() => setIsTrashView(false)}
+                  style={{ marginTop: 12 }}
+                >
+                  ← Retourner à mes fichiers
+                </button>
+              </div>
+            ) : (
+              <div className="drive-items-table-wrapper">
+                <table className="drive-table">
+                  <thead>
+                    <tr>
+                      <th>Élément supprimé</th>
+                      <th>Emplacement d'origine</th>
+                      <th>Supprimé le</th>
+                      <th>Rétention</th>
+                      <th style={{ textAlign: "right" }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trashItems.map((item) => (
+                      <tr key={item.id} className="drive-row">
+                        <td className="cell-item-name">
+                          <div className="cell-item-name-inner">
+                            <span className={item.isFolder ? "folder-icon-wrap" : "file-icon-wrap"}>
+                              {item.isFolder ? (
+                                <IconFolder size={18} stroke={1.7} />
+                              ) : (
+                                getFileIcon(item.name)
+                              )}
+                            </span>
+                            <strong className="item-title">{item.name}</strong>
+                          </div>
+                        </td>
+                        <td className="cell-muted cell-mono">
+                          {item.originalPath}
+                        </td>
+                        <td className="cell-muted cell-mono">
+                          {new Date(item.deletedAt).toLocaleDateString("fr-CH", {
+                            day: "2-digit",
+                            month: "short",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </td>
+                        <td>
+                          <span className="trash-days-tag">
+                            {item.daysLeft} jour{item.daysLeft > 1 ? "s" : ""} restant{item.daysLeft > 1 ? "s" : ""}
+                          </span>
+                        </td>
+                        <td className="cell-actions">
+                          <button
+                            type="button"
+                            className="drive-action-btn btn-restore"
+                            onClick={() => handleRestoreTrashItem(item.id, item.name)}
+                            title="Restaurer cet élément à son emplacement d'origine"
+                          >
+                            <IconArrowBackUp size={13} stroke={1.8} /> Restaurer
+                          </button>
+                          <button
+                            type="button"
+                            className="drive-action-btn btn-delete"
+                            onClick={() => handlePermanentDelete(item.id, item.name)}
+                            title="Détruire définitivement (irréversible)"
+                          >
+                            <IconTrashX size={13} stroke={1.8} /> Détruire
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : loading ? (
           <div className="drive-loading-state">
             <IconRefresh size={24} stroke={1.5} className="spin-icon" />
             <p>Chargement des fichiers...</p>
@@ -619,8 +874,8 @@ export function AdminDrive() {
                         <button
                           type="button"
                           className="drive-action-btn btn-delete"
-                          onClick={() => handleDelete(folder.path, true, folder.name)}
-                          title="Supprimer le dossier"
+                          onClick={() => handleDelete(folder.path, true, folder.name, 0)}
+                          title="Déplacer dans la corbeille (30 jours)"
                         >
                           <IconTrash size={13} stroke={1.8} />
                         </button>
@@ -672,7 +927,7 @@ export function AdminDrive() {
                           type="button"
                           className="drive-action-btn btn-preview-action"
                           onClick={() => handlePreviewFile(file)}
-                          title="Visualiser en ligne"
+                          title="Visualiser et éditer en ligne"
                         >
                           <IconEye size={13} stroke={1.8} /> Aperçu
                         </button>
@@ -703,8 +958,8 @@ export function AdminDrive() {
                         <button
                           type="button"
                           className="drive-action-btn btn-delete"
-                          onClick={() => handleDelete(file.path, false, file.name)}
-                          title="Supprimer le fichier"
+                          onClick={() => handleDelete(file.path, false, file.name, file.size)}
+                          title="Déplacer dans la corbeille (30 jours)"
                         >
                           <IconTrash size={13} stroke={1.8} />
                         </button>
@@ -1053,7 +1308,63 @@ export function AdminDrive() {
         </div>
       )}
 
-      {/* 7. MODAL D'APERÇU / VISUALISATION EN LIGNE */}
+      {/* 7. MODAL CRÉATION DE NOTE TEXTE / MARKDOWN */}
+      {isNoteModalOpen && (
+        <div className="drive-modal-overlay" onClick={() => setIsNoteModalOpen(false)}>
+          <div className="drive-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="drive-modal-head">
+              <div>
+                <span className="modal-kicker">Éditeur de documents</span>
+                <h4>Nouvelle note Markdown / Texte</h4>
+              </div>
+              <button
+                type="button"
+                className="drive-modal-close"
+                onClick={() => setIsNoteModalOpen(false)}
+                title="Fermer"
+              >
+                <IconX size={18} stroke={2} />
+              </button>
+            </div>
+            <form onSubmit={handleCreateNote} className="drive-modal-form">
+              <div className="admin-field">
+                <label htmlFor="note-name-input">Nom du document</label>
+                <input
+                  id="note-name-input"
+                  type="text"
+                  className="admin-input"
+                  placeholder="ex: idees-projet.md, reunion.txt, config.json"
+                  value={newNoteName}
+                  onChange={(e) => setNewNoteName(e.target.value)}
+                  autoFocus
+                  required
+                />
+                <span className="field-hint">
+                  Conseil : terminez par <code>.md</code> pour bénéficier de l'aperçu formaté et de l'éditeur Markdown.
+                </span>
+              </div>
+              <div className="drive-modal-footer">
+                <button
+                  type="button"
+                  className="drive-btn drive-btn-secondary"
+                  onClick={() => setIsNoteModalOpen(false)}
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="drive-btn drive-btn-primary"
+                  disabled={creatingNote || !newNoteName.trim()}
+                >
+                  {creatingNote ? "Création..." : "Créer et ouvrir dans l'éditeur"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 8. MODAL D'APERÇU / ÉDITION EN LIGNE */}
       <FilePreviewModal
         isOpen={Boolean(previewData)}
         onClose={() => setPreviewData(null)}
@@ -1061,6 +1372,7 @@ export function AdminDrive() {
         url={previewData?.url}
         filePath={previewData?.file?.path}
         onDownload={() => previewData && handleDownload(previewData.file.path)}
+        onSaved={loadData}
       />
     </div>
   );
